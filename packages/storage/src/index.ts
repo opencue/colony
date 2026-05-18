@@ -117,4 +117,15 @@ export type {
   McpMetricsDailyRow,
   McpMetricsSessionAggregateRow,
   McpMetricsSessionSummary,
+  MemoirRow,
+  NewMemoir,
+  MemoirConceptRow,
+  NewMemoirConcept,
+  RefineMemoirConcept,
+  MemoirRelationRow,
+  NewMemoirRelation,
+  MemoirRelationType,
+  MemoirSearchHit,
+  MemoirNeighbourEdge,
 } from './types.js';
+export { MEMOIR_RELATION_TYPES } from './types.js';

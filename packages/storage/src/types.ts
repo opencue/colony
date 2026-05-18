@@ -642,3 +642,102 @@ export interface McpMetricsErrorReasonRawRow {
   count: number;
   last_ts: number | null;
 }
+
+// --- memoirs (ICM-style typed knowledge graph) ---
+
+export const MEMOIR_RELATION_TYPES = [
+  'part_of',
+  'depends_on',
+  'related_to',
+  'contradicts',
+  'refines',
+  'alternative_to',
+  'caused_by',
+  'instance_of',
+  'superseded_by',
+] as const;
+export type MemoirRelationType = (typeof MEMOIR_RELATION_TYPES)[number];
+
+export interface MemoirRow {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at: number;
+  created_by: string | null;
+}
+
+export interface NewMemoir {
+  name: string;
+  description?: string | null;
+  created_by?: string | null;
+  created_at?: number;
+}
+
+export interface MemoirConceptRow {
+  id: number;
+  memoir_id: number;
+  name: string;
+  content: string;
+  compressed: number;
+  intensity: string | null;
+  labels: string | null;
+  confidence: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface NewMemoirConcept {
+  memoir_id: number;
+  name: string;
+  content: string;
+  compressed?: boolean;
+  intensity?: string | null;
+  labels?: readonly string[] | null;
+  confidence?: number;
+}
+
+export interface RefineMemoirConcept {
+  content?: string;
+  compressed?: boolean;
+  intensity?: string | null;
+  labels?: readonly string[] | null;
+  confidence?: number;
+}
+
+export interface MemoirRelationRow {
+  id: number;
+  memoir_id: number;
+  source_id: number;
+  target_id: number;
+  relation_type: MemoirRelationType;
+  note: string | null;
+  created_at: number;
+}
+
+export interface NewMemoirRelation {
+  memoir_id: number;
+  source_id: number;
+  target_id: number;
+  relation_type: MemoirRelationType;
+  note?: string | null;
+}
+
+export interface MemoirSearchHit {
+  id: number;
+  memoir_id: number;
+  name: string;
+  score: number;
+  snippet: string;
+  labels: readonly string[];
+  confidence: number;
+}
+
+export interface MemoirNeighbourEdge {
+  relation_id: number;
+  relation_type: MemoirRelationType;
+  direction: 'out' | 'in';
+  other_id: number;
+  other_name: string;
+  note: string | null;
+  depth: number;
+}

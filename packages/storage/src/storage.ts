@@ -9,6 +9,7 @@ import {
   normalizeClaimPath,
 } from './claim-path.js';
 import { COLUMN_MIGRATIONS, POST_MIGRATION_SQL, SCHEMA_SQL } from './schema.js';
+import { MEMOIR_RELATION_TYPES } from './types.js';
 import {
   COORDINATION_COMMIT_TOOLS,
   COORDINATION_READ_TOOLS,
@@ -32,6 +33,12 @@ import type {
   LaneStateRow,
   LaneTakeoverResult,
   LinkedTask,
+  MemoirConceptRow,
+  MemoirNeighbourEdge,
+  MemoirRelationRow,
+  MemoirRelationType,
+  MemoirRow,
+  MemoirSearchHit,
   McpMetricsAggregate,
   McpMetricsAggregateRow,
   McpMetricsCostBasis,
@@ -47,6 +54,9 @@ import type {
   NewAgentProfile,
   NewExample,
   NewMcpMetric,
+  NewMemoir,
+  NewMemoirConcept,
+  NewMemoirRelation,
   NewObservation,
   NewPheromone,
   NewProposal,
@@ -60,6 +70,7 @@ import type {
   PheromoneRow,
   ProposalRow,
   ProposalStatus,
+  RefineMemoirConcept,
   ReinforcementRow,
   SearchHit,
   SessionRow,
@@ -3822,6 +3833,290 @@ export class Storage {
       .prepare('SELECT * FROM observations WHERE ts > ? ORDER BY ts ASC LIMIT ?')
       .all(since_ts, limit) as ObservationRow[];
   }
+
+  // --- memoirs (ICM-style typed knowledge graphs) ---
+
+  createMemoir(p: NewMemoir): MemoirRow {
+    const created_at = p.created_at ?? Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO memoirs(name, description, created_at, created_by)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(p.name, p.description ?? null, created_at, p.created_by ?? null);
+    return this.getMemoirByName(p.name) as MemoirRow;
+  }
+
+  getMemoir(id: number): MemoirRow | undefined {
+    return this.db.prepare('SELECT * FROM memoirs WHERE id = ?').get(id) as MemoirRow | undefined;
+  }
+
+  getMemoirByName(name: string): MemoirRow | undefined {
+    return this.db.prepare('SELECT * FROM memoirs WHERE name = ?').get(name) as
+      | MemoirRow
+      | undefined;
+  }
+
+  listMemoirs(limit = 50): MemoirRow[] {
+    return this.db
+      .prepare('SELECT * FROM memoirs ORDER BY created_at DESC LIMIT ?')
+      .all(limit) as MemoirRow[];
+  }
+
+  addMemoirConcept(p: NewMemoirConcept): MemoirConceptRow {
+    const now = Date.now();
+    const labels = serializeMemoirLabels(p.labels);
+    this.db
+      .prepare(
+        `INSERT INTO memoir_concepts
+           (memoir_id, name, content, compressed, intensity, labels, confidence, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        p.memoir_id,
+        p.name,
+        p.content,
+        p.compressed === false ? 0 : 1,
+        p.intensity ?? null,
+        labels,
+        p.confidence ?? 1.0,
+        now,
+        now,
+      );
+    return this.getMemoirConceptByName(p.memoir_id, p.name) as MemoirConceptRow;
+  }
+
+  refineMemoirConcept(
+    memoir_id: number,
+    name: string,
+    patch: RefineMemoirConcept,
+  ): MemoirConceptRow | undefined {
+    const existing = this.getMemoirConceptByName(memoir_id, name);
+    if (!existing) return undefined;
+    const next: MemoirConceptRow = {
+      ...existing,
+      content: patch.content ?? existing.content,
+      compressed:
+        patch.compressed === undefined ? existing.compressed : patch.compressed ? 1 : 0,
+      intensity: patch.intensity === undefined ? existing.intensity : patch.intensity,
+      labels:
+        patch.labels === undefined ? existing.labels : (serializeMemoirLabels(patch.labels) ?? null),
+      confidence: patch.confidence ?? existing.confidence,
+      updated_at: Date.now(),
+    };
+    this.db
+      .prepare(
+        `UPDATE memoir_concepts
+            SET content = ?, compressed = ?, intensity = ?, labels = ?,
+                confidence = ?, updated_at = ?
+          WHERE id = ?`,
+      )
+      .run(
+        next.content,
+        next.compressed,
+        next.intensity,
+        next.labels,
+        next.confidence,
+        next.updated_at,
+        existing.id,
+      );
+    return this.getMemoirConcept(existing.id);
+  }
+
+  getMemoirConcept(id: number): MemoirConceptRow | undefined {
+    return this.db.prepare('SELECT * FROM memoir_concepts WHERE id = ?').get(id) as
+      | MemoirConceptRow
+      | undefined;
+  }
+
+  getMemoirConceptByName(memoir_id: number, name: string): MemoirConceptRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM memoir_concepts WHERE memoir_id = ? AND name = ?')
+      .get(memoir_id, name) as MemoirConceptRow | undefined;
+  }
+
+  listMemoirConcepts(memoir_id: number, limit = 100): MemoirConceptRow[] {
+    return this.db
+      .prepare(
+        'SELECT * FROM memoir_concepts WHERE memoir_id = ? ORDER BY created_at ASC LIMIT ?',
+      )
+      .all(memoir_id, limit) as MemoirConceptRow[];
+  }
+
+  linkMemoirConcepts(p: NewMemoirRelation): MemoirRelationRow {
+    if (p.source_id === p.target_id) {
+      throw new Error('cannot link a concept to itself');
+    }
+    // `INSERT OR IGNORE` silently swallows CHECK-constraint violations, which
+    // would mask an invalid relation_type as "row already exists". Validate in
+    // JS so unknown relation types fail loudly at the call site.
+    if (!MEMOIR_RELATION_TYPES_SET.has(p.relation_type)) {
+      throw new Error(
+        `invalid memoir relation_type "${p.relation_type}" (must be one of: ${[...MEMOIR_RELATION_TYPES_SET].join(', ')})`,
+      );
+    }
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO memoir_relations
+           (memoir_id, source_id, target_id, relation_type, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(p.memoir_id, p.source_id, p.target_id, p.relation_type, p.note ?? null, now);
+    return this.db
+      .prepare(
+        `SELECT * FROM memoir_relations
+          WHERE source_id = ? AND target_id = ? AND relation_type = ?`,
+      )
+      .get(p.source_id, p.target_id, p.relation_type) as MemoirRelationRow;
+  }
+
+  /**
+   * Hybrid memoir search: FTS5 BM25 over (name, content, labels). Label
+   * filter is a substring match on the JSON-encoded labels column so callers
+   * can pass `"domain:auth"` and match `["domain:auth","type:service"]`.
+   */
+  searchMemoirConcepts(p: {
+    memoir_id?: number;
+    query: string;
+    label?: string;
+    limit?: number;
+  }): MemoirSearchHit[] {
+    const limit = p.limit ?? 20;
+    const matchExpr = sanitiseMemoirMatchExpression(p.query);
+    const params: unknown[] = [matchExpr];
+    let where = 'memoir_concepts_fts MATCH ?';
+    if (p.memoir_id !== undefined) {
+      where += ' AND c.memoir_id = ?';
+      params.push(p.memoir_id);
+    }
+    if (p.label) {
+      where += ' AND c.labels LIKE ?';
+      params.push(`%${p.label}%`);
+    }
+    params.push(limit);
+    const rows = this.db
+      .prepare(
+        `SELECT c.id, c.memoir_id, c.name, c.labels, c.confidence,
+                bm25(memoir_concepts_fts) AS score,
+                snippet(memoir_concepts_fts, 1, '[', ']', '…', 12) AS snippet
+           FROM memoir_concepts_fts
+           JOIN memoir_concepts c ON c.id = memoir_concepts_fts.rowid
+          WHERE ${where}
+          ORDER BY score ASC
+          LIMIT ?`,
+      )
+      .all(...params) as Array<{
+      id: number;
+      memoir_id: number;
+      name: string;
+      labels: string | null;
+      confidence: number;
+      score: number;
+      snippet: string;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      memoir_id: r.memoir_id,
+      name: r.name,
+      score: r.score,
+      snippet: r.snippet,
+      labels: parseMemoirLabels(r.labels),
+      confidence: r.confidence,
+    }));
+  }
+
+  /**
+   * BFS over both relation directions out to `depth`. Returns one row per
+   * edge encountered, with depth 1 = direct neighbours. Source/target rows
+   * for the *root* concept itself are not included; callers already have
+   * that via `getMemoirConcept`.
+   */
+  inspectMemoirConcept(root_id: number, depth = 1): MemoirNeighbourEdge[] {
+    const maxDepth = Math.max(1, Math.min(depth, 5));
+    const seen = new Set<number>([root_id]);
+    const edges: MemoirNeighbourEdge[] = [];
+    let frontier = [root_id];
+    const outStmt = this.db.prepare(
+      `SELECT r.id AS relation_id, r.relation_type, r.target_id AS other_id,
+              r.note, c.name AS other_name
+         FROM memoir_relations r
+         JOIN memoir_concepts c ON c.id = r.target_id
+        WHERE r.source_id = ?`,
+    );
+    const inStmt = this.db.prepare(
+      `SELECT r.id AS relation_id, r.relation_type, r.source_id AS other_id,
+              r.note, c.name AS other_name
+         FROM memoir_relations r
+         JOIN memoir_concepts c ON c.id = r.source_id
+        WHERE r.target_id = ?`,
+    );
+    for (let d = 1; d <= maxDepth && frontier.length > 0; d++) {
+      const next: number[] = [];
+      for (const node of frontier) {
+        const out = outStmt.all(node) as Array<{
+          relation_id: number;
+          relation_type: MemoirRelationType;
+          other_id: number;
+          other_name: string;
+          note: string | null;
+        }>;
+        for (const r of out) {
+          edges.push({ ...r, direction: 'out', depth: d });
+          if (!seen.has(r.other_id)) {
+            seen.add(r.other_id);
+            next.push(r.other_id);
+          }
+        }
+        const incoming = inStmt.all(node) as Array<{
+          relation_id: number;
+          relation_type: MemoirRelationType;
+          other_id: number;
+          other_name: string;
+          note: string | null;
+        }>;
+        for (const r of incoming) {
+          edges.push({ ...r, direction: 'in', depth: d });
+          if (!seen.has(r.other_id)) {
+            seen.add(r.other_id);
+            next.push(r.other_id);
+          }
+        }
+      }
+      frontier = next;
+    }
+    return edges;
+  }
+}
+
+const MEMOIR_RELATION_TYPES_SET = new Set<string>(MEMOIR_RELATION_TYPES);
+
+function serializeMemoirLabels(labels: readonly string[] | null | undefined): string | null {
+  if (!labels || labels.length === 0) return null;
+  return JSON.stringify(labels);
+}
+
+function parseMemoirLabels(raw: string | null): readonly string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * FTS5 MATCH treats unquoted punctuation and operator tokens as syntax. We
+ * tokenise into bare word terms and wrap each in double-quotes so a query
+ * like `auth/jwt service` or `node:fs` survives as plain phrase search.
+ */
+function sanitiseMemoirMatchExpression(query: string): string {
+  const terms = query
+    .split(/[^A-Za-z0-9_]+/)
+    .filter((t) => t.length > 0)
+    .map((t) => `"${t.replace(/"/g, '""')}"`);
+  return terms.length === 0 ? '""' : terms.join(' ');
 }
 
 function emptyClaimMatchSources(): ClaimMatchSources {

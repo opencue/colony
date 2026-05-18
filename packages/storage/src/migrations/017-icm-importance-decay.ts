@@ -22,7 +22,7 @@
  * SCHEMA_SQL DDL update (fresh DBs) and COLUMN_MIGRATIONS (existing DBs).
  */
 
-export const version = 15;
+export const version = 17;
 export const name = 'icm-importance-decay';
 
 export const sql = `

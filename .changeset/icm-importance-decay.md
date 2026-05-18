@@ -27,7 +27,8 @@ medium/low rows; `--min-weight <n>` overrides the default 0.1
 threshold and `--dry-run` reports the candidate count without
 deleting. Critical/high are never affected.
 
-Storage: schema bumped to version 15 with four additive columns on
+Storage: schema bumped to version 17 with four additive columns on
 `observations` and two new indexes. `Storage.recordAccess`,
 `Storage.pruneLowDecay`, and `Storage.countLowDecayCandidates` are
-the public primitives.
+the public primitives. (Originally targeted version 15 in isolation;
+landed at 17 alongside slice 1 memoirs and slice 2 feedback.)

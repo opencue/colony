@@ -7,6 +7,12 @@ import {
   type FeedbackRow,
   type FeedbackStat,
   type Importance,
+  type MemoirConceptRow,
+  type MemoirNeighbourEdge,
+  type MemoirRelationRow,
+  type MemoirRelationType,
+  type MemoirRow,
+  type MemoirSearchHit,
   type NewObservation,
   type ObservationRow,
   Storage,
@@ -269,6 +275,162 @@ export class MemoryStore {
       started_at: Date.now(),
       metadata: serializeSessionMetadata(sessionIdentityMetadata(identity)),
     });
+  }
+
+  // --- memoirs (ICM-style typed knowledge graphs) ---
+
+  createMemoir(p: {
+    name: string;
+    description?: string | null;
+    created_by?: string | null;
+  }): MemoirRow {
+    const existing = this.storage.getMemoirByName(p.name);
+    if (existing) return existing;
+    return this.storage.createMemoir({
+      name: p.name,
+      description: p.description ?? null,
+      created_by: p.created_by ?? null,
+    });
+  }
+
+  listMemoirs(limit?: number): MemoirRow[] {
+    return this.storage.listMemoirs(limit);
+  }
+
+  getMemoirByName(name: string): MemoirRow | undefined {
+    return this.storage.getMemoirByName(name);
+  }
+
+  /**
+   * Concept descriptions go through the same redact → compress pipeline as
+   * observations. Empty or fully-redacted bodies are rejected so memoirs
+   * never accumulate empty nodes.
+   */
+  addMemoirConcept(p: {
+    memoir: string;
+    name: string;
+    content: string;
+    labels?: readonly string[];
+    confidence?: number;
+  }): MemoirConceptRow {
+    const memoir = this.getOrThrowMemoir(p.memoir);
+    const intensity = this.settings.compression.intensity;
+    const prepared = prepareMemoryText(p.content, intensity);
+    if (!prepared) {
+      throw new Error(`memoir concept "${p.name}" has empty content after redaction`);
+    }
+    return this.storage.addMemoirConcept({
+      memoir_id: memoir.id,
+      name: p.name,
+      content: prepared.compressed,
+      compressed: true,
+      intensity,
+      labels: p.labels ?? null,
+      confidence: p.confidence ?? 1.0,
+    });
+  }
+
+  refineMemoirConcept(p: {
+    memoir: string;
+    name: string;
+    content?: string;
+    labels?: readonly string[];
+    confidence?: number;
+  }): MemoirConceptRow | undefined {
+    const memoir = this.getOrThrowMemoir(p.memoir);
+    const patch: {
+      content?: string;
+      compressed?: boolean;
+      intensity?: string;
+      labels?: readonly string[];
+      confidence?: number;
+    } = {};
+    if (p.content !== undefined) {
+      const intensity = this.settings.compression.intensity;
+      const prepared = prepareMemoryText(p.content, intensity);
+      if (!prepared) {
+        throw new Error(`memoir concept "${p.name}" patch is empty after redaction`);
+      }
+      patch.content = prepared.compressed;
+      patch.compressed = true;
+      patch.intensity = intensity;
+    }
+    if (p.labels !== undefined) patch.labels = p.labels;
+    if (p.confidence !== undefined) patch.confidence = p.confidence;
+    return this.storage.refineMemoirConcept(memoir.id, p.name, patch);
+  }
+
+  linkMemoirConcepts(p: {
+    memoir: string;
+    from: string;
+    to: string;
+    relation: MemoirRelationType;
+    note?: string;
+  }): MemoirRelationRow {
+    const memoir = this.getOrThrowMemoir(p.memoir);
+    const source = this.storage.getMemoirConceptByName(memoir.id, p.from);
+    const target = this.storage.getMemoirConceptByName(memoir.id, p.to);
+    if (!source) throw new Error(`memoir concept "${p.from}" not found in "${p.memoir}"`);
+    if (!target) throw new Error(`memoir concept "${p.to}" not found in "${p.memoir}"`);
+    return this.storage.linkMemoirConcepts({
+      memoir_id: memoir.id,
+      source_id: source.id,
+      target_id: target.id,
+      relation_type: p.relation,
+      note: p.note ?? null,
+    });
+  }
+
+  searchMemoirConcepts(p: {
+    memoir?: string;
+    query: string;
+    label?: string;
+    limit?: number;
+  }): MemoirSearchHit[] {
+    let memoir_id: number | undefined;
+    if (p.memoir) {
+      const m = this.storage.getMemoirByName(p.memoir);
+      if (!m) return [];
+      memoir_id = m.id;
+    }
+    return this.storage.searchMemoirConcepts({
+      ...(memoir_id !== undefined ? { memoir_id } : {}),
+      query: p.query,
+      ...(p.label !== undefined ? { label: p.label } : {}),
+      ...(p.limit !== undefined ? { limit: p.limit } : {}),
+    });
+  }
+
+  /**
+   * Returns the concept body (expanded when caller requests it) plus its
+   * BFS neighbourhood out to `depth`. Mirrors progressive disclosure:
+   * `searchMemoirConcepts` is compact, `inspectMemoirConcept` is full.
+   */
+  inspectMemoirConcept(p: {
+    memoir: string;
+    name: string;
+    depth?: number;
+    expand?: boolean;
+  }): {
+    concept: MemoirConceptRow & { content_expanded: string };
+    neighbours: MemoirNeighbourEdge[];
+  } | null {
+    const memoir = this.storage.getMemoirByName(p.memoir);
+    if (!memoir) return null;
+    const concept = this.storage.getMemoirConceptByName(memoir.id, p.name);
+    if (!concept) return null;
+    const want = p.expand ?? this.settings.compression.expandForModel;
+    const expanded = want ? expand(concept.content) : concept.content;
+    return {
+      concept: { ...concept, content_expanded: expanded },
+      neighbours: this.storage.inspectMemoirConcept(concept.id, p.depth ?? 1),
+    };
+  }
+
+  private getOrThrowMemoir(name: string): MemoirRow {
+    const m = this.storage.getMemoirByName(name);
+    if (!m) throw new Error(`memoir "${name}" not found`);
+    return m;
   }
 
   // --- reads ---

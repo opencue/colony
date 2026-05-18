@@ -1,4 +1,4 @@
-export const version = 15;
+export const version = 16;
 export const name = 'icm-feedback';
 
 // ICM slice 2 (`docs/icm-integration-plan.md`) — feedback lane.

@@ -20,6 +20,7 @@ import { registerTaskForagingReport } from './tools/foraging.js';
 import * as handoff from './tools/handoff.js';
 import { createHeartbeatWrapper, installActiveSessionHeartbeat } from './tools/heartbeat.js';
 import * as hivemind from './tools/hivemind.js';
+import * as memoirs from './tools/memoirs.js';
 import * as message from './tools/message.js';
 import { createMetricsWrapper } from './tools/metrics-wrapper.js';
 import * as planValidate from './tools/plan-validate.js';
@@ -147,6 +148,12 @@ export function buildServer(
   // examples_integrate_plan. Registered after spec so the heartbeat has
   // wrapped the earlier tools before we bind these three.
   foraging.register(server, ctx);
+
+  // Memoirs lane (ICM-inspired typed knowledge graphs). Adds memoir_create,
+  // memoir_list, memoir_add_concept, memoir_refine, memoir_link,
+  // memoir_search, memoir_inspect. Registered last so heartbeat + metrics
+  // wrappers have already wrapped the core surface.
+  memoirs.register(server, ctx);
 
   return server;
 }
