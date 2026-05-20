@@ -63,6 +63,13 @@ describe('MCP server', () => {
       'hivemind',
       'hivemind_context',
       'list_sessions',
+      'memoir_add_concept',
+      'memoir_create',
+      'memoir_inspect',
+      'memoir_link',
+      'memoir_list',
+      'memoir_refine',
+      'memoir_search',
       'openspec_sync_status',
       'queen_plan_goal',
       'recall_session',
@@ -1495,7 +1502,7 @@ describe('MCP server', () => {
     });
   });
 
-  it('search returns compact hits (id, kind, snippet, score, task_id, ts)', async () => {
+  it('search returns compact hits (id, kind, snippet, score, task_id, ts, importance, weight)', async () => {
     await seed();
     const res = await client.callTool({ name: 'search', arguments: { query: 'cargo' } });
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '[]';
@@ -1505,15 +1512,18 @@ describe('MCP server', () => {
       expect(h).toHaveProperty('id');
       expect(h).toHaveProperty('snippet');
       expect(h).toHaveProperty('score');
-      // No full body leaks into the compact shape.
+      // ICM slice 3 — search hits carry importance + weight so callers can
+      // prioritise. Full bodies still flow only through get_observations.
       expect(Object.keys(h).sort()).toEqual([
         'id',
+        'importance',
         'kind',
         'score',
         'session_id',
         'snippet',
         'task_id',
         'ts',
+        'weight',
       ]);
     }
   });

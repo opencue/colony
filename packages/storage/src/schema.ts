@@ -22,7 +22,11 @@ CREATE TABLE IF NOT EXISTS observations (
   compressed INTEGER NOT NULL DEFAULT 1,
   intensity TEXT,
   ts INTEGER NOT NULL,
-  metadata TEXT
+  metadata TEXT,
+  importance TEXT NOT NULL DEFAULT 'medium' CHECK(importance IN ('critical','high','medium','low')),
+  access_count INTEGER NOT NULL DEFAULT 0,
+  last_accessed_at INTEGER,
+  weight REAL NOT NULL DEFAULT 1.0
 );
 CREATE INDEX IF NOT EXISTS idx_observations_session ON observations(session_id, ts);
 CREATE INDEX IF NOT EXISTS idx_observations_ts ON observations(ts);
@@ -331,6 +335,75 @@ CREATE TABLE IF NOT EXISTS coach_progress (
   evidence TEXT
 );
 
+-- Memoirs: ICM-style typed knowledge graphs (slice 1). A memoir is a named
+-- container of concepts (graph nodes) connected by typed relations (graph
+-- edges). Concept bodies route through prepareMemoryText() before persistence
+-- so the compression invariant that holds for observations also holds here.
+CREATE TABLE IF NOT EXISTS memoirs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL UNIQUE,
+  description TEXT,
+  created_at  INTEGER NOT NULL,
+  created_by  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS memoir_concepts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  memoir_id   INTEGER NOT NULL REFERENCES memoirs(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  content     TEXT NOT NULL,
+  compressed  INTEGER NOT NULL DEFAULT 1,
+  intensity   TEXT,
+  labels      TEXT,
+  confidence  REAL NOT NULL DEFAULT 1.0 CHECK(confidence BETWEEN 0 AND 1),
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  UNIQUE(memoir_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_memoir_concepts_memoir ON memoir_concepts(memoir_id, name);
+
+-- Typed edges. Self-loops are forbidden, and (source, target, type) is
+-- unique so re-linking the same relation is idempotent at the SQL layer.
+CREATE TABLE IF NOT EXISTS memoir_relations (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  memoir_id     INTEGER NOT NULL REFERENCES memoirs(id) ON DELETE CASCADE,
+  source_id     INTEGER NOT NULL REFERENCES memoir_concepts(id) ON DELETE CASCADE,
+  target_id     INTEGER NOT NULL REFERENCES memoir_concepts(id) ON DELETE CASCADE,
+  relation_type TEXT NOT NULL CHECK(relation_type IN (
+    'part_of','depends_on','related_to','contradicts','refines',
+    'alternative_to','caused_by','instance_of','superseded_by'
+  )),
+  note          TEXT,
+  created_at    INTEGER NOT NULL,
+  CHECK(source_id <> target_id),
+  UNIQUE(source_id, target_id, relation_type)
+);
+CREATE INDEX IF NOT EXISTS idx_memoir_relations_source ON memoir_relations(source_id, relation_type);
+CREATE INDEX IF NOT EXISTS idx_memoir_relations_target ON memoir_relations(target_id, relation_type);
+CREATE INDEX IF NOT EXISTS idx_memoir_relations_memoir ON memoir_relations(memoir_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS memoir_concepts_fts USING fts5(
+  name, content, labels,
+  content='memoir_concepts',
+  content_rowid='id',
+  tokenize='porter unicode61'
+);
+
+CREATE TRIGGER IF NOT EXISTS memoir_concepts_ai AFTER INSERT ON memoir_concepts BEGIN
+  INSERT INTO memoir_concepts_fts(rowid, name, content, labels)
+  VALUES (new.id, new.name, new.content, COALESCE(new.labels, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS memoir_concepts_ad AFTER DELETE ON memoir_concepts BEGIN
+  INSERT INTO memoir_concepts_fts(memoir_concepts_fts, rowid, name, content, labels)
+  VALUES ('delete', old.id, old.name, old.content, COALESCE(old.labels, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS memoir_concepts_au AFTER UPDATE ON memoir_concepts BEGIN
+  INSERT INTO memoir_concepts_fts(memoir_concepts_fts, rowid, name, content, labels)
+  VALUES ('delete', old.id, old.name, old.content, COALESCE(old.labels, ''));
+  INSERT INTO memoir_concepts_fts(rowid, name, content, labels)
+  VALUES (new.id, new.name, new.content, COALESCE(new.labels, ''));
+END;
+
 -- ICM slice 2 (docs/icm-integration-plan.md): "AI predicted X, real answer
 -- was Y" feedback lane. prediction/correction/context bodies pass through
 -- the @colony/core MemoryStore compression path before they ever reach this
@@ -371,7 +444,10 @@ CREATE TRIGGER IF NOT EXISTS feedback_au AFTER UPDATE ON feedback BEGIN
   VALUES (new.id, new.topic, new.prediction, new.correction, new.context);
 END;
 
-INSERT OR IGNORE INTO schema_version(version) VALUES (15);
+-- ICM slice 3 columns on observations (importance + temporal decay) are
+-- inlined into the table DDL above so a fresh DB ships them; existing DBs
+-- pick them up via COLUMN_MIGRATIONS below.
+INSERT OR IGNORE INTO schema_version(version) VALUES (17);
 `;
 
 /**
@@ -450,6 +526,29 @@ export const COLUMN_MIGRATIONS: ReadonlyArray<{ table: string; column: string; s
     column: 'open_proposal_count',
     sql: 'ALTER TABLE agent_profiles ADD COLUMN open_proposal_count INTEGER NOT NULL DEFAULT 0',
   },
+  // ICM slice 3 — observation importance + temporal decay.
+  // Default 'medium' / 0 / NULL / 1.0 matches the SCHEMA_SQL DDL so a fresh DB
+  // and an upgraded DB are indistinguishable after migration.
+  {
+    table: 'observations',
+    column: 'importance',
+    sql: "ALTER TABLE observations ADD COLUMN importance TEXT NOT NULL DEFAULT 'medium' CHECK(importance IN ('critical','high','medium','low'))",
+  },
+  {
+    table: 'observations',
+    column: 'access_count',
+    sql: 'ALTER TABLE observations ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0',
+  },
+  {
+    table: 'observations',
+    column: 'last_accessed_at',
+    sql: 'ALTER TABLE observations ADD COLUMN last_accessed_at INTEGER',
+  },
+  {
+    table: 'observations',
+    column: 'weight',
+    sql: 'ALTER TABLE observations ADD COLUMN weight REAL NOT NULL DEFAULT 1.0',
+  },
 ];
 
 export const POST_MIGRATION_SQL = `
@@ -463,4 +562,6 @@ CREATE INDEX IF NOT EXISTS idx_mcp_metrics_error_ts ON mcp_metrics(ok, error_cod
 CREATE INDEX IF NOT EXISTS idx_task_threads_proposal_status
   ON tasks(proposal_status)
   WHERE proposal_status IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_observations_importance ON observations(importance);
+CREATE INDEX IF NOT EXISTS idx_observations_weight ON observations(weight);
 `;

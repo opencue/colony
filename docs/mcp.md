@@ -105,6 +105,13 @@ workflow guidance.
 | Feedback | `feedback_record` | Record an "AI predicted X, real answer was Y" correction. |
 | Feedback | `feedback_search` | Search prior corrections by FTS5 query and optional topic. |
 | Feedback | `feedback_stats` | Per-topic counts of recorded corrections. |
+| Memoirs | `memoir_create` | Create a named knowledge-graph container. |
+| Memoirs | `memoir_list` | List memoirs (compact). |
+| Memoirs | `memoir_add_concept` | Add a typed concept (graph node) to a memoir. |
+| Memoirs | `memoir_refine` | Update an existing concept's content/labels/confidence. |
+| Memoirs | `memoir_link` | Create a typed edge between two concepts in a memoir. |
+| Memoirs | `memoir_search` | FTS5 search over concept name/content/labels. |
+| Memoirs | `memoir_inspect` | Full body + BFS neighbourhood for a concept. |
 
 ## Ruflo sidecar boundary
 
@@ -2305,6 +2312,95 @@ Args:
 - `topic?` — exact-match filter; scopes the response to a single bucket.
 
 Response shape: `{ "stats": [{ "topic": string, "count": number, "last_created_at": number }] }`.
+
+## `memoir_create`
+
+Create a named knowledge graph (memoir). Idempotent on `name`: re-creating an existing memoir returns the existing row. ICM slice 1 (see `docs/icm-integration-plan.md`).
+
+Args:
+
+- `name` — stable identifier (e.g. `"system-architecture"`).
+- `description?` — short summary of what the memoir covers.
+- `created_by?` — agent or human author.
+
+Returns the full memoir row (`id`, `name`, `description`, `created_at`, `created_by`).
+
+## `memoir_list`
+
+List existing memoirs in reverse chronological order. Compact list — use `memoir_search`/`memoir_inspect` to dive into concepts.
+
+Args:
+
+- `limit?` — defaults to 50, max 200.
+
+Response: `{ "memoirs": [{ id, name, description?, created_at, created_by? }] }`.
+
+## `memoir_add_concept`
+
+Add a concept (graph node) to a memoir. `content` flows through the redact → compress pipeline (same as `addObservation`). `labels` is an array of `"k:v"` strings that `memoir_search` can filter on. Confidence defaults to `1.0`.
+
+Args:
+
+- `memoir` — memoir name.
+- `name` — concept name, unique inside the memoir.
+- `content` — prose body (will be compressed).
+- `labels?` — array of `"k:v"` strings.
+- `confidence?` — `0..1`, defaults to `1.0`.
+
+Returns the new concept row.
+
+## `memoir_refine`
+
+Refine an existing concept in place. Concepts are permanent — there is no decay — so use this to update the definition, labels, or confidence as understanding improves. To mark a concept obsolete, link a newer concept with relation `superseded_by` instead.
+
+Args:
+
+- `memoir` — memoir name.
+- `name` — concept name.
+- `content?` — replacement body.
+- `labels?` — replacement label set.
+- `confidence?` — `0..1`.
+
+Returns the updated concept row.
+
+## `memoir_link`
+
+Create a typed edge between two concepts. Relation must be one of `part_of`, `depends_on`, `related_to`, `contradicts`, `refines`, `alternative_to`, `caused_by`, `instance_of`, `superseded_by`. Self-links are rejected. `(source, target, relation)` is unique, so re-linking the same edge is a no-op.
+
+Args:
+
+- `memoir` — memoir name.
+- `from` — source concept name.
+- `to` — target concept name.
+- `relation` — one of the nine relation types above.
+- `note?` — short rationale.
+
+Returns the new relation row.
+
+## `memoir_search`
+
+FTS5 search over concept `name`, `content`, and `labels`. Returns compact hits — id, name, score, snippet, labels — so callers pay expansion cost only via `memoir_inspect`.
+
+Args:
+
+- `memoir?` — restrict to a single memoir; omit to search across all memoirs.
+- `query` — FTS5 query.
+- `label?` — additional label filter (e.g. `"domain:auth"`).
+- `limit?` — defaults to 20, max 100.
+
+Response: `{ "hits": [{ id, memoir_id, name, score, snippet, labels? }] }`.
+
+## `memoir_inspect`
+
+Show a concept's full (expanded) body plus its BFS neighbourhood out to `depth`. Use after `memoir_search` returns interesting hits.
+
+Args:
+
+- `memoir` — memoir name.
+- `name` — concept name.
+- `depth?` — BFS hop count. Defaults to `1`, max `5`.
+
+Response: `{ "concept": { ...full row, content expanded }, "edges": [{ relation_type, source, target, note? }] }`.
 
 ## Plan observation kinds
 

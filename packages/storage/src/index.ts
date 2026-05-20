@@ -51,7 +51,13 @@ export type {
   ToolCallRow,
 } from './storage.js';
 export type { ToolClass } from './tool-classes.js';
+export {
+  IMPORTANCE_BASE_WEIGHT,
+  baseWeightFor,
+  isDecayingImportance,
+} from './types.js';
 export type {
+  Importance,
   SessionRow,
   ObservationRow,
   SummaryRow,
@@ -111,4 +117,15 @@ export type {
   McpMetricsDailyRow,
   McpMetricsSessionAggregateRow,
   McpMetricsSessionSummary,
+  MemoirRow,
+  NewMemoir,
+  MemoirConceptRow,
+  NewMemoirConcept,
+  RefineMemoirConcept,
+  MemoirRelationRow,
+  NewMemoirRelation,
+  MemoirRelationType,
+  MemoirSearchHit,
+  MemoirNeighbourEdge,
 } from './types.js';
+export { MEMOIR_RELATION_TYPES } from './types.js';
