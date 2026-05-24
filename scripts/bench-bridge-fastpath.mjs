@@ -2,7 +2,7 @@
 // Benchmark the bridge-lifecycle fast-path vs the in-process Node fallback.
 //
 // Boots a fresh worker against a temp HOME, then runs N concurrent
-// invocations of `apps/cli/bin/colony.sh bridge lifecycle --json ...` with
+// invocations of `apps/cli/bin/colony.mjs bridge lifecycle --json ...` with
 // realistic OMX envelopes — once with the daemon reachable (fast path),
 // once with COLONY_BRIDGE_FAST=0 (forced fallback, mirrors today's behavior
 // before this PR). Reports wall time, mean, p95.
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
-const SHIM = resolve(REPO, 'apps/cli/bin/colony.sh');
+const SHIM = resolve(REPO, 'apps/cli/bin/colony.mjs');
 
 const CONCURRENCY = Number(process.argv[2] ?? 8);
 const ITERATIONS = Number(process.argv[3] ?? 4);
@@ -53,7 +53,7 @@ function mkenvelope(i) {
 function runOnce(envelope, env) {
   const start = process.hrtime.bigint();
   const result = spawnSync(
-    'sh',
+    process.execPath,
     [SHIM, 'bridge', 'lifecycle', '--json', '--ide', 'claude-code', '--cwd', '/tmp/bench'],
     {
       input: envelope,
