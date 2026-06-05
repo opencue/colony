@@ -17,8 +17,8 @@
 // - Pure node:* builtins so the same shim runs on Linux, macOS, and Windows
 //   (cmd, PowerShell, Git Bash) — no curl, no /bin/sh.
 
-import { connect } from 'node:net';
 import { request } from 'node:http';
+import { connect } from 'node:net';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
