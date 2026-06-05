@@ -77,10 +77,11 @@ describe('SettingsSchema', () => {
 
   it('uses COLONY_HOME for default settings location and data dir', () => {
     const original = process.env.COLONY_HOME;
-    process.env.COLONY_HOME = '/tmp/colony-test-home';
+    const home = join(tmpdir(), 'colony-test-home');
+    process.env.COLONY_HOME = home;
     try {
-      expect(settingsPath()).toBe('/tmp/colony-test-home/settings.json');
-      expect(loadSettings().dataDir).toBe('/tmp/colony-test-home');
+      expect(settingsPath()).toBe(join(home, 'settings.json'));
+      expect(loadSettings().dataDir).toBe(home);
     } finally {
       if (original === undefined) delete process.env.COLONY_HOME;
       else process.env.COLONY_HOME = original;

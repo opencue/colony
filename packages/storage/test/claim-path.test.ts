@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -12,7 +12,9 @@ import {
 let dir: string;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'colony-claim-path-'));
+  // realpath so macOS's /var -> /private/var symlink doesn't mismatch the
+  // canonicalized paths normalizeRepoFilePath returns.
+  dir = realpathSync(mkdtempSync(join(tmpdir(), 'colony-claim-path-')));
 });
 
 afterEach(() => {
