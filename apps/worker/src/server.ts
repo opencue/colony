@@ -176,7 +176,7 @@ export function buildApp(
   });
 
   // Daemon fast-path for `colony bridge lifecycle`. The bin shim at
-  // apps/cli/bin/colony.sh POSTs the envelope here when the worker is up,
+  // apps/cli/bin/colony.mjs POSTs the envelope here when the worker is up,
   // skipping a per-event Node cold start. Falls through to the in-process
   // Node CLI on any failure (see shim's stdin-replay logic), so writes
   // still succeed when the daemon is down — that's the contract that
