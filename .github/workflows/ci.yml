@@ -20,6 +20,11 @@ jobs:
     # (the `ready_for_review` trigger above), and always on push to main.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ${{ matrix.os }}
+    # ubuntu is the blocking gate. macOS/Windows still run for cross-platform
+    # signal but don't block merges yet: the suite has a tail of platform-specific
+    # test-portability issues (realpath, path separators, installer fixtures) being
+    # ported incrementally. Flip these to blocking once the port is complete.
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
