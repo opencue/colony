@@ -1,0 +1,5 @@
+# Normalize line endings to LF on checkout across all platforms so tests that
+# compare file contents against LF-joined fixtures (e.g. test/agents-contract.test.js)
+# pass on the Windows CI matrix. git still auto-detects binary files and leaves
+# them untouched.
+* text=auto eol=lf
