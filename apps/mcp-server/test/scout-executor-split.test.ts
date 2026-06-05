@@ -53,9 +53,10 @@ describe('scout -> proposal -> approval -> executor claim', () => {
 
     await call('task_propose', proposalArgs('spec/scout-e2e-cap/sub-1', [evidenceIds[0]]));
     await call('task_propose', proposalArgs('spec/scout-e2e-cap/sub-2', [evidenceIds[1]]));
-    const capped = await callError('task_propose', proposalArgs('spec/scout-e2e-cap/sub-3', [
-      evidenceIds[1],
-    ]));
+    const capped = await callError(
+      'task_propose',
+      proposalArgs('spec/scout-e2e-cap/sub-3', [evidenceIds[1]]),
+    );
     expect(capped).toMatchObject({ code: 'PROPOSAL_CAP_EXCEEDED' });
 
     const hidden = await call<{ ready: Array<{ plan_slug: string; subtask_index: number }> }>(

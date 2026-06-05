@@ -3,13 +3,13 @@ import { existsSync } from 'node:fs';
 import {
   type SettingDoc,
   SettingsSchema,
+  type TtlOverrideKey,
   defaultSettings,
   effectiveTtlConfig,
   loadSettings,
   saveSettings,
   settingsDocs,
   settingsPath,
-  type TtlOverrideKey,
 } from '@colony/config';
 import type { Command } from 'commander';
 import kleur from 'kleur';

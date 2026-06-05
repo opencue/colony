@@ -29,11 +29,9 @@ describe('storage migrations', () => {
         expect.arrayContaining(['role', 'open_proposal_count']),
       );
 
-      db.prepare('INSERT INTO agent_profiles(agent, capabilities, updated_at) VALUES (?, ?, ?)').run(
-        'codex',
-        '{}',
-        1_000,
-      );
+      db.prepare(
+        'INSERT INTO agent_profiles(agent, capabilities, updated_at) VALUES (?, ?, ?)',
+      ).run('codex', '{}', 1_000);
       expect(db.prepare('SELECT role, open_proposal_count FROM agent_profiles').get()).toEqual({
         role: 'executor',
         open_proposal_count: 0,

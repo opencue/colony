@@ -70,10 +70,7 @@ export function registerPlanCommand(program: Command): void {
     )
     .option('--publish-session <id>', 'Session id for audit trail when --publish is set')
     .option('--publish-agent <name>', 'Agent name for audit trail when --publish is set')
-    .option(
-      '--publish-auto-archive',
-      'Pass --auto-archive through to the chained publish step',
-    )
+    .option('--publish-auto-archive', 'Pass --auto-archive through to the chained publish step')
     .action(async (slug: string, opts: PlanCreateOptions) => {
       const repoRoot = resolve(opts.cwd ?? process.cwd());
       const tasks = parseTaskOptions(opts.task);

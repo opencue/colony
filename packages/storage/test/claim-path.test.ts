@@ -259,9 +259,7 @@ describe('claimPathRejectionMessage', () => {
   });
 
   it('ignores empty-string repo_root and keeps the legacy message', () => {
-    expect(
-      claimPathRejectionMessage('outside_repo', '/tmp/foreign.ts', { repo_root: '' }),
-    ).toBe(
+    expect(claimPathRejectionMessage('outside_repo', '/tmp/foreign.ts', { repo_root: '' })).toBe(
       'claim path "/tmp/foreign.ts" resolves outside this task\'s repo_root and cannot be claimed.',
     );
     expect(claimPathRejectionMessage(null, 'weird.ts', { repo_root: '' })).toBe(

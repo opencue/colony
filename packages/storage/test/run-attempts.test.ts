@@ -197,9 +197,9 @@ describe('run-attempts storage', () => {
     expect(finished.finished_at).toBe(5_000);
     expect(finished.proof_json).toBe(JSON.stringify(proof));
 
-    expect(() =>
-      finishRunAttempt(db(), att.id, { status: 'Failed', error: 'late' }),
-    ).toThrowError(/already in terminal/i);
+    expect(() => finishRunAttempt(db(), att.id, { status: 'Failed', error: 'late' })).toThrowError(
+      /already in terminal/i,
+    );
   });
 
   it('finishRunAttempt requires terminal status', () => {
@@ -209,9 +209,9 @@ describe('run-attempts storage', () => {
       agent_id: 'codex',
       workspace_path: '/wt/a',
     });
-    expect(() =>
-      finishRunAttempt(db(), att.id, { status: 'StreamingTurn' as never }),
-    ).toThrow(RunAttemptError);
+    expect(() => finishRunAttempt(db(), att.id, { status: 'StreamingTurn' as never })).toThrow(
+      RunAttemptError,
+    );
   });
 
   it('parent_attempt_id chains retries', () => {

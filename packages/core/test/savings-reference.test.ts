@@ -78,8 +78,12 @@ describe('savings reference receipts', () => {
     expect(
       comparison.rows.find((r) => r.operation === 'Storage at rest (per observation)'),
     ).toBeUndefined();
+    // savings_report is mapped to the Health/adoption diagnosis row (#522), so it
+    // is matched there — never attributed to the storage-at-rest row checked above.
+    const healthRow = comparison.rows.find((r) => r.operation === 'Health/adoption diagnosis');
+    expect(healthRow?.matched_operations).toContain('savings_report');
     expect(
       comparison.unmatched_operations.find((u) => u.operation === 'savings_report'),
-    ).toMatchObject({ operation: 'savings_report', calls: 2, colony_tokens: 5100 });
+    ).toBeUndefined();
   });
 });

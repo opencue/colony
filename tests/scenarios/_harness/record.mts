@@ -15,11 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectLiveSubstrate } from './assert.mjs';
 import { parseInputsJsonl, runScenarioInputs } from './run.mjs';
-import {
-  BASE_TS,
-  setupScenarioContext,
-  teardownScenarioContext,
-} from './setup.mjs';
+import { BASE_TS, setupScenarioContext, teardownScenarioContext } from './setup.mjs';
 
 const harnessDir = dirname(fileURLToPath(import.meta.url));
 const scenariosRoot = resolve(harnessDir, '..');
@@ -69,7 +65,7 @@ function installDateOverride(initial: number): { set: (ms: number) => void; rest
   // `new Date()` constructor — those are what colony's clock sources
   // call. Building this as a plain function instead of a subclass keeps
   // it out of strict-mode override-modifier checks.
-  function FrozenDate(this: Date | void, ...args: unknown[]): Date | string {
+  function FrozenDate(this: Date | undefined, ...args: unknown[]): Date | string {
     if (!(this instanceof FrozenDate)) {
       return new RealDate(current).toString();
     }
@@ -98,6 +94,6 @@ function installDateOverride(initial: number): { set: (ms: number) => void; rest
 }
 
 main().catch((err) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : String(err));
+  console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
   process.exit(1);
 });

@@ -129,7 +129,9 @@ describe('MemoryStore.clusterObservations()', () => {
   it('rejects out-of-range threshold', async () => {
     await expect(store.clusterObservations([idA1], 1.5, embedder)).rejects.toThrow(/threshold/);
     await expect(store.clusterObservations([idA1], -2, embedder)).rejects.toThrow(/threshold/);
-    await expect(store.clusterObservations([idA1], Number.NaN, embedder)).rejects.toThrow(/threshold/);
+    await expect(store.clusterObservations([idA1], Number.NaN, embedder)).rejects.toThrow(
+      /threshold/,
+    );
   });
 
   it('keeps each observation in exactly one cluster (no double-assignment)', async () => {

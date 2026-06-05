@@ -328,9 +328,7 @@ describe('OMX lifecycle envelope', () => {
       lastHeartbeatAt?: string;
     };
     expect(refreshedSession.lastHeartbeatAt).not.toBeUndefined();
-    expect(Date.parse(refreshedSession.lastHeartbeatAt ?? '')).toBeGreaterThan(
-      Date.now() - 60_000,
-    );
+    expect(Date.parse(refreshedSession.lastHeartbeatAt ?? '')).toBeGreaterThan(Date.now() - 60_000);
   });
 });
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE_TS, type ScenarioContext } from './setup.mjs';
 import { ScenarioConfigError } from './run.mjs';
+import { BASE_TS, type ScenarioContext } from './setup.mjs';
 
 /**
  * Shape of expected.json. All arrays use subset matchers via
@@ -78,9 +78,7 @@ export function collectLiveSubstrate(ctx: ScenarioContext): LiveSubstrate {
   const db = storageWithDb.db;
 
   const obsRows = db
-    .prepare(
-      'SELECT id, kind, ts, metadata FROM observations ORDER BY ts ASC, id ASC',
-    )
+    .prepare('SELECT id, kind, ts, metadata FROM observations ORDER BY ts ASC, id ASC')
     .all() as Array<{ id: number; kind: string; ts: number; metadata: string | null }>;
 
   const claimRows = db
@@ -123,10 +121,7 @@ export function collectLiveSubstrate(ctx: ScenarioContext): LiveSubstrate {
   };
 }
 
-function parseMetadata(
-  raw: string | null,
-  repoRoot: string,
-): Record<string, unknown> | null {
+function parseMetadata(raw: string | null, repoRoot: string): Record<string, unknown> | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defaultSettings, type Settings } from '@colony/config';
+import { type Settings, defaultSettings } from '@colony/config';
 import { type Embedder, MemoryStore, TaskThread } from '@colony/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {

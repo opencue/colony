@@ -605,15 +605,7 @@ describe('colony coordination CLI', () => {
     });
 
     await createProgram().parseAsync(
-      [
-        'node',
-        'test',
-        'coordination',
-        'sweep',
-        '--repo-root',
-        repoRoot,
-        '--release-expired-quota',
-      ],
+      ['node', 'test', 'coordination', 'sweep', '--repo-root', repoRoot, '--release-expired-quota'],
       { from: 'node' },
     );
 

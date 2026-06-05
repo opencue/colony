@@ -248,9 +248,27 @@ describe('mcp_metrics storage', () => {
     const may13late = Date.UTC(2026, 4, 13, 23, 30, 0);
     const may14 = Date.UTC(2026, 4, 14, 1, 15, 0);
 
-    record(storage, { ts: may13, operation: 'search', input_tokens: 10, output_tokens: 100, duration_ms: 5 });
-    record(storage, { ts: may13late, operation: 'search', input_tokens: 20, output_tokens: 200, duration_ms: 7 });
-    record(storage, { ts: may14, operation: 'timeline', input_tokens: 5, output_tokens: 50, duration_ms: 3 });
+    record(storage, {
+      ts: may13,
+      operation: 'search',
+      input_tokens: 10,
+      output_tokens: 100,
+      duration_ms: 5,
+    });
+    record(storage, {
+      ts: may13late,
+      operation: 'search',
+      input_tokens: 20,
+      output_tokens: 200,
+      duration_ms: 7,
+    });
+    record(storage, {
+      ts: may14,
+      operation: 'timeline',
+      input_tokens: 5,
+      output_tokens: 50,
+      duration_ms: 3,
+    });
 
     const rows = storage.aggregateMcpMetricsDaily({ since: 0 });
     expect(rows.map((r) => r.day)).toEqual(['2026-05-14', '2026-05-13']);

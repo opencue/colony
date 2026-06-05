@@ -26,9 +26,14 @@ describe('notify', () => {
     });
     if (!argv) return; // unsupported platform
     const joined = argv.join(' ');
-    expect(joined.includes('"')).toBe(false);
+    // Backslashes and control chars never survive sanitize on any platform.
     expect(joined.includes('\\')).toBe(false);
     expect(joined.includes('\n')).toBe(false);
+    // The injected quote is stripped from the content. darwin's osascript form
+    // keeps its own structural wrapping quotes, so assert the embedded quote is
+    // gone rather than that the argv contains no quote at all.
+    expect(joined).not.toContain('col"ony');
+    expect(joined).toContain('colony');
   });
 
   it('maps levels to notify-send urgency on linux', () => {

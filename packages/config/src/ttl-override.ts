@@ -83,7 +83,10 @@ export function effectiveTtlConfig(settings: Settings, cwd = process.cwd()): Eff
   };
 }
 
-export function parseTtlOverride(raw: string, path = TTL_OVERRIDE_RELATIVE_PATH): TtlOverrideValues {
+export function parseTtlOverride(
+  raw: string,
+  path = TTL_OVERRIDE_RELATIVE_PATH,
+): TtlOverrideValues {
   const values: TtlOverrideValues = {};
   const errors: string[] = [];
 

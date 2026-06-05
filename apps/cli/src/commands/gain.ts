@@ -1,12 +1,12 @@
 import { loadSettings } from '@colony/config';
 import {
+  type DriftReport,
   SAVINGS_REFERENCE_ROWS,
   type SavingsLiveComparison,
   type SavingsLiveComparisonCost,
   type SavingsReferenceRow,
   type SavingsReferenceTotals,
   classifyDrift,
-  type DriftReport,
   savingsLiveComparison,
   savingsLiveComparisonCost,
   savingsReferenceTotals,
@@ -335,9 +335,9 @@ export function registerGainCommand(program: Command): void {
 
       const baselineWarning =
         minTs !== null && minTs > baselineSince
-          ? `baseline window starts before first recorded metric — drift detection needs ~${
-              Math.ceil((recentDays + baselineDays + 3) - (now - minTs) / (24 * 60 * 60_000))
-            } more day${baselineDays > 1 ? 's' : ''} of history`
+          ? `baseline window starts before first recorded metric — drift detection needs ~${Math.ceil(
+              recentDays + baselineDays + 3 - (now - minTs) / (24 * 60 * 60_000),
+            )} more day${baselineDays > 1 ? 's' : ''} of history`
           : null;
 
       if (opts.json === true) {
@@ -1794,14 +1794,10 @@ export function writeDriftReport(report: DriftReport, input: DriftReportInput): 
     writeDriftInsufficient(report);
   }
   if (report.new_tools.length > 0) {
-    w.write(
-      `${kleur.dim('New tools (no baseline):')} ${report.new_tools.join(', ')}\n`,
-    );
+    w.write(`${kleur.dim('New tools (no baseline):')} ${report.new_tools.join(', ')}\n`);
   }
   if (report.gone_tools.length > 0) {
-    w.write(
-      `${kleur.dim('Gone tools (no recent calls):')} ${report.gone_tools.join(', ')}\n`,
-    );
+    w.write(`${kleur.dim('Gone tools (no recent calls):')} ${report.gone_tools.join(', ')}\n`);
   }
 }
 
@@ -1810,15 +1806,17 @@ function writeDriftInsufficient(report: DriftReport): void {
     .map((row) => row.operation)
     .slice(0, 12)
     .join(', ');
-  const more = report.insufficient_data.length > 12
-    ? `, +${report.insufficient_data.length - 12} more`
-    : '';
+  const more =
+    report.insufficient_data.length > 12 ? `, +${report.insufficient_data.length - 12} more` : '';
   process.stdout.write(
     `${kleur.dim(`Insufficient data (n<${report.threshold.min_calls}):`)} ${names}${more}\n`,
   );
 }
 
-function formatDriftRatio(ratio: number | null, classification: DriftReport['rows'][number]['classification']): string {
+function formatDriftRatio(
+  ratio: number | null,
+  classification: DriftReport['rows'][number]['classification'],
+): string {
   if (ratio === null) return '-';
   const rounded = ratio >= 10 ? ratio.toFixed(1) : ratio.toFixed(2);
   if (classification === 'up_drift') return kleur.red(`▲${rounded}x`);

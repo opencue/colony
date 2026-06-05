@@ -71,16 +71,17 @@ describe('config ttl command', () => {
       ['claimStaleMinutes: 77', 'coordinationSweepIntervalMinutes: 0'].join('\n'),
     );
     let output = '';
-    const write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
-      output += String(chunk);
-      return true;
-    });
+    const write = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk: string | Uint8Array) => {
+        output += String(chunk);
+        return true;
+      });
 
     try {
-      await createProgram().parseAsync(
-        ['node', 'test', 'config', 'ttl', '--cwd', repo, '--json'],
-        { from: 'node' },
-      );
+      await createProgram().parseAsync(['node', 'test', 'config', 'ttl', '--cwd', repo, '--json'], {
+        from: 'node',
+      });
     } finally {
       write.mockRestore();
       rmSync(dir, { recursive: true, force: true });
