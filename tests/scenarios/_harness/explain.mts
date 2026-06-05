@@ -10,14 +10,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseInputsJsonl } from './run.mjs';
 import type {
   ExpectedClaim,
   ExpectedLifecycleEvent,
-  ExpectedObservation,
   ExpectedMcpMetric,
+  ExpectedObservation,
   ExpectedSubstrate,
 } from './assert.mjs';
+import { parseInputsJsonl } from './run.mjs';
 
 const harnessDir = dirname(fileURLToPath(import.meta.url));
 const scenariosRoot = resolve(harnessDir, '..');
@@ -70,9 +70,7 @@ for (const input of inputs) {
     const action = stringField(payload, 'action') ?? '<action>';
     const session = stringField(payload, 'session_id') ?? '';
     const file = stringField(payload, 'file_path');
-    console.log(
-      `  ${t}  task    ${action.padEnd(14, ' ')}  ${file ? `${file} ` : ''}${session}`,
-    );
+    console.log(`  ${t}  task    ${action.padEnd(14, ' ')}  ${file ? `${file} ` : ''}${session}`);
   } else {
     console.log(`  ${t}  tick    ${stringField(payload, 'reason') ?? ''}`);
   }
@@ -92,9 +90,7 @@ if (!expected) {
     console.log(`  mcp_metrics[]:  ${expected.mcp_metrics.map(describeMetric).join(', ')}`);
   }
   if (expected.lifecycle_events?.length) {
-    console.log(
-      `  lifecycle[]:    ${expected.lifecycle_events.map(describeLifecycle).join(', ')}`,
-    );
+    console.log(`  lifecycle[]:    ${expected.lifecycle_events.map(describeLifecycle).join(', ')}`);
   }
 }
 

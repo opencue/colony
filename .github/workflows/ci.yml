@@ -36,6 +36,11 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+        # The importance perf smoke (50ms p95 @ 50k rows) is environment-sensitive
+        # on shared CI runners; its documented escape hatch keeps it a local/manual
+        # check while the unit suite covers correctness.
+        env:
+          COLONY_SKIP_PERF: '1'
       - run: pnpm build
 
   e2e-publish:

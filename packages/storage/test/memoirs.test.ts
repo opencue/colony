@@ -24,14 +24,12 @@ describe('Storage memoirs', () => {
   it('runs the migration cleanly and exposes the memoir tables', () => {
     const db = new Database(dbPath);
     try {
-      const versions = db
-        .prepare('SELECT version FROM schema_version ORDER BY version')
-        .all() as { version: number }[];
+      const versions = db.prepare('SELECT version FROM schema_version ORDER BY version').all() as {
+        version: number;
+      }[];
       expect(versions.map((v) => v.version)).toContain(17);
       const fts = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='memoir_concepts_fts'",
-        )
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memoir_concepts_fts'")
         .get();
       expect(fts).toBeDefined();
     } finally {

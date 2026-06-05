@@ -1,5 +1,5 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { MEMOIR_RELATION_TYPES, type MemoirRelationType } from '@colony/storage';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { type ToolContext, defaultWrapHandler } from './context.js';
 
@@ -59,19 +59,16 @@ export function register(server: McpServer, ctx: ToolContext): void {
       labels: z.array(z.string()).optional(),
       confidence: z.number().min(0).max(1).optional(),
     },
-    wrapHandler(
-      'memoir_add_concept',
-      async ({ memoir, name, content, labels, confidence }) => {
-        const row = store.addMemoirConcept({
-          memoir,
-          name,
-          content,
-          ...(labels !== undefined ? { labels } : {}),
-          ...(confidence !== undefined ? { confidence } : {}),
-        });
-        return { content: [{ type: 'text', text: JSON.stringify(row) }] };
-      },
-    ),
+    wrapHandler('memoir_add_concept', async ({ memoir, name, content, labels, confidence }) => {
+      const row = store.addMemoirConcept({
+        memoir,
+        name,
+        content,
+        ...(labels !== undefined ? { labels } : {}),
+        ...(confidence !== undefined ? { confidence } : {}),
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(row) }] };
+    }),
   );
 
   server.tool(

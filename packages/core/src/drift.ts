@@ -129,10 +129,7 @@ function classifyOne(
   return 'stable';
 }
 
-function computeRatio(
-  baseline: number | null,
-  recent: number | null,
-): number | null {
+function computeRatio(baseline: number | null, recent: number | null): number | null {
   if (baseline === null || recent === null) return null;
   if (baseline <= 0) return null;
   return recent / baseline;

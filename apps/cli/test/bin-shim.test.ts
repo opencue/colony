@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir, platform } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -82,7 +82,7 @@ describe('bin/colony.mjs', () => {
       cliStub,
       [
         "import { appendFileSync } from 'node:fs';",
-        "const log = process.env.COLONY_STUB_LOG;",
+        'const log = process.env.COLONY_STUB_LOG;',
         "appendFileSync(log, 'ARGV_BEGIN\\n');",
         "for (const a of process.argv.slice(2)) appendFileSync(log, a + '\\n');",
         "appendFileSync(log, 'ARGV_END\\n');",
@@ -92,8 +92,8 @@ describe('bin/colony.mjs', () => {
         "process.stdin.on('data', (c) => { buf += c; });",
         "process.stdin.on('end', () => {",
         "  appendFileSync(log, buf + '\\nSTDIN_END\\n');",
-        "});",
-        "",
+        '});',
+        '',
       ].join('\n'),
     );
   });

@@ -62,9 +62,7 @@ export function parseInputsJsonl(path: string): ScenarioInput[] {
       );
     }
     if (!isInput(parsed)) {
-      throw new ScenarioConfigError(
-        `inputs.jsonl line ${lineNo} missing kind | at_ms | payload`,
-      );
+      throw new ScenarioConfigError(`inputs.jsonl line ${lineNo} missing kind | at_ms | payload`);
     }
     out.push(parsed);
   }
@@ -182,7 +180,6 @@ export async function runScenarioInputs(
     if (input.kind === 'task') {
       const payload = expandPlaceholders(input.payload, ctx.repoRoot) as Record<string, unknown>;
       handleTaskAction(ctx, payload, input.at_ms);
-      continue;
     }
   }
 }
@@ -200,7 +197,7 @@ function handleTaskAction(
   atMs: number,
 ): void {
   const action = requireString(payload, 'action');
-  const taskId = numberOr(payload, 'task_id', NaN);
+  const taskId = numberOr(payload, 'task_id', Number.NaN);
   if (!Number.isFinite(taskId)) {
     throw new ScenarioConfigError(`task envelope at t+${atMs}ms missing numeric task_id`);
   }
@@ -242,16 +239,14 @@ function handleTaskAction(
   }
 
   if (action === 'accept_relay') {
-    const explicit = numberOr(payload, 'relay_observation_id', NaN);
-    const obsId = Number.isFinite(explicit)
-      ? explicit
-      : findLatestRelayId(ctx, taskId, atMs);
+    const explicit = numberOr(payload, 'relay_observation_id', Number.NaN);
+    const obsId = Number.isFinite(explicit) ? explicit : findLatestRelayId(ctx, taskId, atMs);
     thread.acceptRelay(obsId, requireString(payload, 'session_id'));
     return;
   }
 
   if (action === 'release_expired_quota') {
-    const obsId = numberOr(payload, 'handoff_observation_id', NaN);
+    const obsId = numberOr(payload, 'handoff_observation_id', Number.NaN);
     thread.releaseExpiredQuotaClaims({
       session_id: requireString(payload, 'session_id'),
       ...(Number.isFinite(obsId) ? { handoff_observation_id: obsId } : {}),

@@ -8,10 +8,7 @@ import type {
   TaskRunAttemptFinish,
   TaskRunAttemptRow,
 } from './types.js';
-import {
-  RUN_ATTEMPT_ACTIVE_STATUSES,
-  RUN_ATTEMPT_TERMINAL_STATUSES,
-} from './types.js';
+import { RUN_ATTEMPT_ACTIVE_STATUSES, RUN_ATTEMPT_TERMINAL_STATUSES } from './types.js';
 
 const TERMINAL = new Set<RunAttemptStatus>(RUN_ATTEMPT_TERMINAL_STATUSES);
 const ACTIVE = new Set<RunAttemptStatus>(RUN_ATTEMPT_ACTIVE_STATUSES);
@@ -80,6 +77,7 @@ export function createRunAttempt(
     now,
     input.parent_attempt_id ?? null,
   );
+  // biome-ignore lint/style/noNonNullAssertion: row is guaranteed present right after the preceding write with this id
   return getRunAttempt(db, id)!;
 }
 
@@ -93,9 +91,7 @@ export function listRunAttemptsByTask(
   limit = 50,
 ): TaskRunAttemptRow[] {
   return db
-    .prepare(
-      'SELECT * FROM task_run_attempts WHERE task_id = ? ORDER BY started_at DESC LIMIT ?',
-    )
+    .prepare('SELECT * FROM task_run_attempts WHERE task_id = ? ORDER BY started_at DESC LIMIT ?')
     .all(taskId, limit) as TaskRunAttemptRow[];
 }
 
@@ -121,6 +117,7 @@ export function updateRunAttemptStatus(
     });
   }
   db.prepare('UPDATE task_run_attempts SET status = ? WHERE id = ?').run(status, id);
+  // biome-ignore lint/style/noNonNullAssertion: row is guaranteed present right after the preceding write with this id
   return getRunAttempt(db, id)!;
 }
 
@@ -177,6 +174,7 @@ export function recordRunAttemptEvent(
     nextStatus,
     id,
   );
+  // biome-ignore lint/style/noNonNullAssertion: row is guaranteed present right after the preceding write with this id
   return getRunAttempt(db, id)!;
 }
 
@@ -214,5 +212,6 @@ export function finishRunAttempt(
        proof_json = COALESCE(?, proof_json)
      WHERE id = ?`,
   ).run(status, finishedAt, finish.error ?? null, proofJson, id);
+  // biome-ignore lint/style/noNonNullAssertion: row is guaranteed present right after the preceding write with this id
   return getRunAttempt(db, id)!;
 }

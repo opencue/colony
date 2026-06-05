@@ -48,7 +48,11 @@ beforeEach(() => {
   // first regardless of FTS.
   store.addObservation({ session_id: 's1', kind: 'note', content: 'alpha first content' });
   store.addObservation({ session_id: 's1', kind: 'note', content: 'beta second content' });
-  store.addObservation({ session_id: 's1', kind: 'decision', content: 'cargo build pipeline notes' });
+  store.addObservation({
+    session_id: 's1',
+    kind: 'decision',
+    content: 'cargo build pipeline notes',
+  });
   store.addObservation({ session_id: 's1', kind: 'note', content: 'delta fourth row content' });
 });
 

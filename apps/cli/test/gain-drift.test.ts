@@ -1,4 +1,4 @@
-import { classifyDrift, type DriftRawRow } from '@colony/core';
+import { type DriftRawRow, classifyDrift } from '@colony/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeDriftReport } from '../src/commands/gain.js';
 

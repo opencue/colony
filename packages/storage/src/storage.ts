@@ -9,12 +9,12 @@ import {
   normalizeClaimPath,
 } from './claim-path.js';
 import { COLUMN_MIGRATIONS, POST_MIGRATION_SQL, SCHEMA_SQL } from './schema.js';
-import { MEMOIR_RELATION_TYPES } from './types.js';
 import {
   COORDINATION_COMMIT_TOOLS,
   COORDINATION_READ_TOOLS,
   FILE_EDIT_TOOLS,
 } from './tool-classes.js';
+import { MEMOIR_RELATION_TYPES } from './types.js';
 import type {
   AccountClaimRow,
   AccountClaimState,
@@ -33,12 +33,6 @@ import type {
   LaneStateRow,
   LaneTakeoverResult,
   LinkedTask,
-  MemoirConceptRow,
-  MemoirNeighbourEdge,
-  MemoirRelationRow,
-  MemoirRelationType,
-  MemoirRow,
-  MemoirSearchHit,
   McpMetricsAggregate,
   McpMetricsAggregateRow,
   McpMetricsCostBasis,
@@ -50,6 +44,12 @@ import type {
   McpMetricsSessionAggregateRow,
   McpMetricsSessionRawRow,
   McpMetricsSessionSummary,
+  MemoirConceptRow,
+  MemoirNeighbourEdge,
+  MemoirRelationRow,
+  MemoirRelationType,
+  MemoirRow,
+  MemoirSearchHit,
   NewAccountClaim,
   NewAgentProfile,
   NewExample,
@@ -3896,11 +3896,12 @@ export class Storage {
     const next: MemoirConceptRow = {
       ...existing,
       content: patch.content ?? existing.content,
-      compressed:
-        patch.compressed === undefined ? existing.compressed : patch.compressed ? 1 : 0,
+      compressed: patch.compressed === undefined ? existing.compressed : patch.compressed ? 1 : 0,
       intensity: patch.intensity === undefined ? existing.intensity : patch.intensity,
       labels:
-        patch.labels === undefined ? existing.labels : (serializeMemoirLabels(patch.labels) ?? null),
+        patch.labels === undefined
+          ? existing.labels
+          : (serializeMemoirLabels(patch.labels) ?? null),
       confidence: patch.confidence ?? existing.confidence,
       updated_at: Date.now(),
     };
@@ -3937,9 +3938,7 @@ export class Storage {
 
   listMemoirConcepts(memoir_id: number, limit = 100): MemoirConceptRow[] {
     return this.db
-      .prepare(
-        'SELECT * FROM memoir_concepts WHERE memoir_id = ? ORDER BY created_at ASC LIMIT ?',
-      )
+      .prepare('SELECT * FROM memoir_concepts WHERE memoir_id = ? ORDER BY created_at ASC LIMIT ?')
       .all(memoir_id, limit) as MemoirConceptRow[];
   }
 

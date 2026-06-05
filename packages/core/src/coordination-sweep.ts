@@ -485,10 +485,10 @@ export function buildCoordinationSweep(
     ...released_expired_quota_pending_claims,
     ...released_aged_quota_pending_claims,
   ];
-  const releasedQuotaPendingClaimCount =
-    releasedQuotaPendingClaims.length;
-  const released_quota_pending_summary =
-    summarizeReleasedQuotaPendingClaims(releasedQuotaPendingClaims);
+  const releasedQuotaPendingClaimCount = releasedQuotaPendingClaims.length;
+  const released_quota_pending_summary = summarizeReleasedQuotaPendingClaims(
+    releasedQuotaPendingClaims,
+  );
   const archived_completed_plans =
     opts.archive_completed_plans === true ? archiveCompletedPlans(store, opts) : [];
   const remainingStaleClaims = filterRemainingStaleClaims(staleClaims, staleClaimCleanup);

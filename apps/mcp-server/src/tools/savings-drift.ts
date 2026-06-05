@@ -64,14 +64,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
     },
     wrapHandler(
       'savings_drift_report',
-      async ({
-        baseline_days,
-        recent_days,
-        min_calls,
-        threshold,
-        down_threshold,
-        operation,
-      }) => {
+      async ({ baseline_days, recent_days, min_calls, threshold, down_threshold, operation }) => {
         const baselineDays = baseline_days ?? 14;
         const recentDays = recent_days ?? 3;
         const minCalls = min_calls ?? 20;
@@ -93,9 +86,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
           recent_until: recentUntil,
         });
         const filtered =
-          operation !== undefined
-            ? allRows.filter((row) => row.operation === operation)
-            : allRows;
+          operation !== undefined ? allRows.filter((row) => row.operation === operation) : allRows;
 
         const report = classifyDrift(filtered, {
           threshold: up,

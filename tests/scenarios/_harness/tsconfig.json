@@ -5,8 +5,5 @@
     "types": ["node"],
     "allowImportingTsExtensions": false
   },
-  "include": [
-    "**/*.ts",
-    "**/*.mts"
-  ]
+  "include": ["**/*.ts", "**/*.mts"]
 }

@@ -1402,13 +1402,15 @@ describe('task_plan auto-archive', () => {
       const last = await claimAndComplete('auto-archive-grace-timer', 1, 'C', 'claude');
       expect(last.auto_archive.status).toBe('skipped');
       expect(last.auto_archive.reason).toMatch(/grace/);
-      expect(existsSync(join(repoRoot, 'openspec/changes/auto-archive-grace-timer/CHANGE.md')))
-        .toBe(true);
+      expect(
+        existsSync(join(repoRoot, 'openspec/changes/auto-archive-grace-timer/CHANGE.md')),
+      ).toBe(true);
 
       await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(existsSync(join(repoRoot, 'openspec/changes/auto-archive-grace-timer/CHANGE.md')))
-        .toBe(false);
+      expect(
+        existsSync(join(repoRoot, 'openspec/changes/auto-archive-grace-timer/CHANGE.md')),
+      ).toBe(false);
       const parentTask = store.storage
         .listTasks(2000)
         .find((t) => t.branch === 'spec/auto-archive-grace-timer');

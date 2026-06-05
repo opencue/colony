@@ -5,9 +5,9 @@ import { defaultSettings } from '@colony/config';
 import { MAX_OPEN_PROPOSALS_PER_SCOUT, MemoryStore } from '@colony/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  type ProposalHandlerContext,
   handleTaskApproveProposal,
   handleTaskPropose,
-  type ProposalHandlerContext,
 } from '../../src/handlers/proposals.js';
 
 interface SqlRunResult {
@@ -146,11 +146,7 @@ function installProposalSchema(): void {
   addColumnIfMissing('tasks', 'approved_by', 'TEXT');
   addColumnIfMissing('tasks', 'observation_evidence_ids', 'TEXT');
   addColumnIfMissing('agent_profiles', 'role', "TEXT NOT NULL DEFAULT 'executor'");
-  addColumnIfMissing(
-    'agent_profiles',
-    'open_proposal_count',
-    'INTEGER NOT NULL DEFAULT 0',
-  );
+  addColumnIfMissing('agent_profiles', 'open_proposal_count', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function addColumnIfMissing(
@@ -159,7 +155,10 @@ function addColumnIfMissing(
   definition: string,
 ): void {
   const columns = new Set(
-    db.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)),
+    db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .map((row) => String(row.name)),
   );
   if (!columns.has(column)) {
     db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();

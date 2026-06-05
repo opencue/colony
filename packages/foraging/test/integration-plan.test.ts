@@ -100,7 +100,9 @@ describe('buildIntegrationPlan', () => {
       example_name: 'app',
     });
     expect(plan.concepts_to_port.some((f) => f.source === 'examples/app/src/index.ts')).toBe(true);
-    expect(plan.concepts_to_port[0]?.target_hint).toBe('package.json');
+    expect(
+      plan.concepts_to_port.find((f) => f.source === 'examples/app/src/index.ts')?.target_hint,
+    ).toBe('src/index.ts');
     expect(JSON.stringify(plan)).toContain('Port concept');
     expect(JSON.stringify(plan)).not.toContain('copy file');
     expect(JSON.stringify(plan)).not.toContain('add dependency');

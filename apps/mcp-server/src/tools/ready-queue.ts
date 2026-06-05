@@ -590,8 +590,7 @@ function applyPendingReadyClaimObligation(
   result: ReadyForAgentResult,
   pending: RankedSubtask,
 ): ReadyForAgentResult {
-  const nextAction =
-    `Previous task_ready_for_agent call still requires task_plan_claim_subtask for ${pending.plan_slug}/sub-${pending.subtask_index}; claim it before reading the ready queue again.`;
+  const nextAction = `Previous task_ready_for_agent call still requires task_plan_claim_subtask for ${pending.plan_slug}/sub-${pending.subtask_index}; claim it before reading the ready queue again.`;
   return {
     ...result,
     ready: result.ready.filter(
