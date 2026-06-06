@@ -117,7 +117,11 @@ describe('runHook', () => {
     expect(tl[0]?.content).not.toMatch(/basically/i);
   });
 
-  it('user-prompt-submit reminds Claude Code to read files before edit tools', async () => {
+  it('user-prompt-submit injects no static edit-safety mandate (context-aware, not forcing)', async () => {
+    // Colony no longer pushes a per-turn read-before-edit reminder: the Claude
+    // Code harness already rejects un-read edits, so the string was token cost,
+    // not context. With no live task activity, the preface is empty — context
+    // is offered only when there is something live to report, never as a mandate.
     const claude = await runHook(
       'user-prompt-submit',
       {
@@ -128,8 +132,8 @@ describe('runHook', () => {
       { store },
     );
     expect(claude.ok).toBe(true);
-    expect(claude.context).toContain('Read each existing target file before Edit/Update/MultiEdit');
-    expect(claude.context).toContain('File must be read first');
+    expect(claude.context ?? '').not.toContain('Edit/Update/MultiEdit');
+    expect(claude.context ?? '').not.toContain('File must be read first');
 
     const codex = await runHook(
       'user-prompt-submit',
@@ -522,7 +526,57 @@ describe('runHook', () => {
     expect(store.storage.getClaim(taskId, 'src/viewer.tsx')?.session_id).toBe('A');
   });
 
-  it('denies protected live contentions even when bridge policy is warn', async () => {
+  it('warns on protected live contentions in default warn policy but never blocks', async () => {
+    // Context-aware, not forcing: default 'warn' surfaces the protected-branch
+    // conflict as a warning + telemetry but does NOT return permissionDecision:
+    // 'deny'. The agent stays in control; the foreign claim is preserved (the
+    // contended file is not auto-claimed away from its owner).
+    const { protectedTaskId, agentTaskId } = seedProtectedContention();
+
+    const result = await runHook(
+      'pre-tool-use',
+      {
+        session_id: 'B',
+        ide: 'codex',
+        tool_name: 'Edit',
+        tool_input: { file_path: 'src/shared.ts' },
+      },
+      { store },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.permissionDecision).toBe('allow');
+    expect(result.permissionDecisionReason).toBeUndefined();
+    const warning = JSON.parse(result.context ?? '{}') as Record<string, unknown>;
+    expect(warning).toMatchObject({
+      code: 'LIVE_FILE_CONTENTION',
+      policy_mode: 'warn',
+      conflict: true,
+      conflict_strength: 'strong',
+      protected: true,
+      owner: 'A',
+      owner_branch: 'main',
+    });
+    expect(store.storage.getClaim(protectedTaskId, 'src/shared.ts')?.session_id).toBe('A');
+    expect(store.storage.getClaim(agentTaskId, 'src/shared.ts')).toBeUndefined();
+    // Telemetry still records the contention even though nothing was blocked.
+    const telemetry = store.storage.taskObservationsByKind(protectedTaskId, 'claim-before-edit');
+    expect(metadataOf(telemetry[0])).toMatchObject({
+      policy_mode: 'warn',
+      code: 'LIVE_FILE_CONTENTION',
+      conflict: true,
+      conflict_strength: 'strong',
+      protected: true,
+      owner: 'A',
+      owner_branch: 'main',
+    });
+  });
+
+  it('denies protected live contentions when bridge policy is block-on-conflict', async () => {
+    // Opt-in hard block: a repo that sets policyMode='block-on-conflict' restores
+    // the protective deny for protected-branch strong-claim contention. The deny
+    // is now a choice the repo makes, not a default Colony forces on every agent.
+    useBridgePolicy('block-on-conflict');
     const { protectedTaskId, agentTaskId } = seedProtectedContention();
 
     const result = await runHook(
@@ -542,7 +596,7 @@ describe('runHook', () => {
     const warning = JSON.parse(result.context ?? '{}') as Record<string, unknown>;
     expect(warning).toMatchObject({
       code: 'LIVE_FILE_CONTENTION',
-      policy_mode: 'warn',
+      policy_mode: 'block-on-conflict',
       conflict: true,
       conflict_strength: 'strong',
       protected: true,
@@ -551,16 +605,6 @@ describe('runHook', () => {
     });
     expect(store.storage.getClaim(protectedTaskId, 'src/shared.ts')?.session_id).toBe('A');
     expect(store.storage.getClaim(agentTaskId, 'src/shared.ts')).toBeUndefined();
-    const telemetry = store.storage.taskObservationsByKind(protectedTaskId, 'claim-before-edit');
-    expect(metadataOf(telemetry[0])).toMatchObject({
-      policy_mode: 'warn',
-      code: 'LIVE_FILE_CONTENTION',
-      conflict: true,
-      conflict_strength: 'strong',
-      protected: true,
-      owner: 'A',
-      owner_branch: 'main',
-    });
   });
 
   it('allows protected edits after takeover assigns the protected claim to this session', async () => {
