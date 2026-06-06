@@ -64,7 +64,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
 
   server.tool(
     'hivemind_context',
-    'Before editing, inspect ownership, then call attention_inbox now before choosing work. Returns suggested_call, active ownership, relevant memory, negative warnings, nearby claims, hot files, compact attention counts, and observation IDs.',
+    'Pull a compact coordination snapshot for a repo when it helps — no obligation to call it. Returns suggested_call (the natural next pull, e.g. attention_inbox), active ownership, relevant memory, negative warnings, nearby claims, hot files, compact attention counts, and observation IDs.',
     {
       repo_root: z.string().min(1).optional(),
       repo_roots: z.array(z.string().min(1)).max(20).optional(),

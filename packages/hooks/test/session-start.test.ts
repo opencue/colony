@@ -193,7 +193,13 @@ describe('SessionStart predictive suggestion preface', () => {
       expect(preface).toContain('task_ready_for_agent');
       expect(preface).toContain('task_claim_file');
       expect(preface).toContain('task_hand_off');
-      expect(preface).toContain('`rtk`');
+      // Compact contract is availability framing, not an imperative mandate: it
+      // offers the tools ("available, not required") and drops the old
+      // "claim ... before edits" directive and the `rtk` command mandate.
+      // Colony stops forcing the agent through a ritual.
+      expect(preface).toContain('available, not required');
+      expect(preface).not.toContain('`rtk`');
+      expect(preface).not.toContain('before edits');
       // Verbose-only paragraphs are absent in compact mode (the win we're shipping).
       expect(preface).not.toContain('Shutdown / finish contract');
       expect(preface).not.toContain('Before quota/session stop:');

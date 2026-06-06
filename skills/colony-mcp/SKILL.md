@@ -5,9 +5,10 @@ description: Coordinate repository work through Colony MCP. Use when an agent st
 
 # Colony MCP
 
-Use Colony as the coordination source of truth. Colony does not run agents; it
-shows live branches, claims, handoffs, ready work, stale ownership, and compact
-memory so agents avoid duplicate work.
+Colony is a coordination surface you pull from when it helps — it does not run
+agents and never forces a ritual. It shows live branches, claims, handoffs,
+ready work, stale ownership, and compact memory so you avoid duplicate work.
+The steps below are a menu: use the parts that fit the task, skip the rest.
 
 ## Startup
 

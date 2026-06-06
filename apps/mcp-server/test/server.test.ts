@@ -234,7 +234,7 @@ describe('MCP server', () => {
     expect(taskListDescription).not.toMatch(/^Find task threads/);
     expect(byName.get('task_hand_off')?.description).toMatch(/^Give work to another agent/);
     expect(byName.get('hivemind_context')?.description).toContain(
-      'Before editing, inspect ownership',
+      'Pull a compact coordination snapshot',
     );
   });
 
@@ -651,7 +651,7 @@ describe('MCP server', () => {
     expect(claimDescription).toContain('file ownership');
     expect(claimDescription).toContain('never block writes');
     expect(hivemindDescription).toContain(
-      'Before editing, inspect ownership, then call attention_inbox now before choosing work.',
+      'Pull a compact coordination snapshot for a repo when it helps',
     );
     expect(docs).toContain(
       'Before editing, inspect ownership, then claim touched files on the active task.',

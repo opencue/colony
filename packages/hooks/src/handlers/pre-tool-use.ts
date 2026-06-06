@@ -191,7 +191,14 @@ export function claimBeforeEditFromToolUse(
     if (protectedConflict) {
       result.conflicts.push(protectedConflict);
       result.edits_missing_claim.push(file_path);
-      result.blocked_conflicts.push(protectedConflict);
+      // Advisory by default: Colony never forces a tool call. Only escalate a
+      // protected-branch conflict to a hard block (permissionDecision:'deny')
+      // when the repo explicitly opts into block-on-conflict — mirroring the
+      // live-claim gate below. The warning + telemetry below still fire in
+      // every mode, so the agent is informed without being blocked.
+      if (policyMode === 'block-on-conflict') {
+        result.blocked_conflicts.push(protectedConflict);
+      }
       recordClaimBeforeEditFailure(store, input.session_id, {
         task_id: protectedConflict.task_id,
         file_path,

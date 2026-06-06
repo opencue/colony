@@ -40,6 +40,7 @@ import { registerResumeCommand } from './commands/resume.js';
 import { registerScoutCommand } from './commands/scout.js';
 import { registerSearchCommand } from './commands/search.js';
 import { registerSidecarCommand } from './commands/sidecar.js';
+import { registerSkillsCommand } from './commands/skills.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerSuggestCommand } from './commands/suggest.js';
 import { registerTaskCommand } from './commands/task.js';
@@ -82,6 +83,7 @@ export function createProgram(): Command {
   registerSearchCommand(program);
   registerScoutCommand(program);
   registerSidecarCommand(program);
+  registerSkillsCommand(program);
   registerSuggestCommand(program);
   registerTaskCommand(program);
   registerCompressCommands(program);

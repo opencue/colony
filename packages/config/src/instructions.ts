@@ -13,10 +13,12 @@ export const quotaSafeOperatingContract = [
   'Before quota/session stop: Emit a quota_exhausted handoff with task_hand_off or task_relay, or release owned claims. Include claimed files, dirty files from git status, branch, last verification, and next step. Mark claims handoff-pending or release them before exit (no strong claims without a handoff or TTL). When unsure, run coordination sweep guidance first and follow its release/handoff recommendation.',
 ].join('\n');
 
-// Compact form: a single-line pointer to AGENTS.md plus the three pre-work
-// tool names. Default since this trims ~350 tokens per SessionStart vs the
-// verbose contract, and AGENTS.md/CLAUDE.md already carry the full protocol.
+// Compact form: an availability pointer, not a mandate. Default since it trims
+// ~350 tokens per SessionStart vs the verbose contract, and AGENTS.md/CLAUDE.md
+// already carry the full protocol. Phrased as "available, pull when it helps"
+// rather than imperative "claim/hand off before X" — Colony offers context, it
+// does not force the agent to run a ritual.
 export const quotaSafeOperatingContractCompact = [
   '## Quota-safe Colony operating contract',
-  'Full contract: AGENTS.md §Colony Coordination Loop. Pre-work tools: hivemind_context, attention_inbox, task_ready_for_agent. Claim each touched file with task_claim_file before edits; hand off via task_hand_off before quota/session stop. RTK command policy: prefix shell commands with `rtk` (e.g. `rtk git status`).',
+  'Colony coordination is available, not required — pull it when it helps. Session + ready work: hivemind_context, attention_inbox, task_ready_for_agent. Flag a file you are editing: task_claim_file. Pass work on: task_hand_off. Full loop, if you want it: AGENTS.md §Colony Coordination Loop.',
 ].join('\n');

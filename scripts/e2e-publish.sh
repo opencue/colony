@@ -61,6 +61,9 @@ test -x "$BIN" || { echo "bin shim missing"; exit 1; }
 # All subsequent commands run in an isolated $HOME so we never touch the real ~/.colony
 export HOME="$HOME_DIR"
 export COLONY_HOME="$HOME_DIR/.colony"
+# Keep `colony install` from shelling out to the user's real cue profile — skill
+# auto-wiring is exercised by unit tests, not this isolated publish smoke test.
+export COLONY_SKILL_WIRE=0
 
 echo "==> 6. version (must match apps/cli/package.json#version)"
 EXPECTED_VERSION=$(node -e "console.log(require('$REPO/apps/cli/package.json').version)")

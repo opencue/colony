@@ -279,7 +279,7 @@ export function buildReadyClaimNudgePreface(
   return [
     '## Ready Queen sub-tasks',
     `${unclaimed} ready ${noun} (${claimedNote}).`,
-    'Call task_ready_for_agent then task_plan_claim_subtask before editing — reading the ready queue without claiming leaves the lane stalled.',
+    'Pull task_ready_for_agent, then task_plan_claim_subtask to claim one — available when you want to work a Queen plan.',
   ].join('\n');
 }
 

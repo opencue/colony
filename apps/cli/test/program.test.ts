@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ensureWritableHookHome } from '../src/commands/hook.js';
-import {
-  COLONY_CLI_INSTALL_COMMAND,
-  COLONY_SKILL_INSTALL_COMMAND,
-} from '../src/commands/install.js';
+import { COLONY_CLI_INSTALL_COMMAND } from '../src/commands/install.js';
+import { COLONY_SKILL_INSTALL_FALLBACK } from '../src/commands/skills.js';
 import { createProgram } from '../src/index.js';
 
 describe('Colony CLI program', () => {
@@ -42,6 +40,7 @@ describe('Colony CLI program', () => {
       'scout',
       'search',
       'sidecar',
+      'skills',
       'start',
       'status',
       'stop',
@@ -91,6 +90,7 @@ describe('Colony CLI program', () => {
         search [options] <query>                          Query memory from the terminal
         scout                                             Review scout task proposals
         sidecar                                           Manage optional runtime sidecars
+        skills                                            Wire Colony coordination skills into the active cue profile
         suggest [options] <description...>                Suggest an approach from similar past task history
         task                                              Task scheduling helpers
         compress [options] <file>                         Compress a file in place (.original backup created)
@@ -132,9 +132,11 @@ describe('Colony CLI program', () => {
     expect(verify).toBeDefined();
   });
 
-  it('documents the CLI and npx skill install commands', () => {
+  it('documents the CLI install command and the manual skill fallback', () => {
     expect(COLONY_CLI_INSTALL_COMMAND).toBe('npm install -g @imdeadpool/colony-cli');
-    expect(COLONY_SKILL_INSTALL_COMMAND).toBe('npx skills add recodeee/colony/skills/colony-mcp');
+    // Fallback shown only when cue is absent. Note the fixed `recodee` path —
+    // the old hint had a `recodeee` typo.
+    expect(COLONY_SKILL_INSTALL_FALLBACK).toBe('npx skills add recodee/colony/skills/colony-mcp');
   });
 
   it('exposes a hook subcommand with a `run` action', () => {
