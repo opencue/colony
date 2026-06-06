@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defaultSettings } from '@colony/config';
@@ -1573,7 +1573,10 @@ describe('MCP server', () => {
   it('registers the MCP caller as an active session on connect and tool use', async () => {
     // The fixture's pre-wired server was built before we set env + cwd, so
     // build an isolated one here to drive the heartbeat path end-to-end.
-    const repoRoot = mkdtempSync(join(tmpdir(), 'colony-mcp-hb-'));
+    // realpath.native so process.cwd() after chdir (which returns the
+    // symlink-resolved path on macOS and the long form on Windows) matches the
+    // repoRoot we assert the session cwd/repo_root/worktree_path against.
+    const repoRoot = realpathSync.native(mkdtempSync(join(tmpdir(), 'colony-mcp-hb-')));
     mkdirSync(join(repoRoot, '.git'), { recursive: true });
     writeFileSync(join(repoRoot, '.git', 'HEAD'), 'ref: refs/heads/hb-branch\n', 'utf8');
 

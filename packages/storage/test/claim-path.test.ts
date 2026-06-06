@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   claimPathRejectionMessage,
@@ -12,9 +12,10 @@ import {
 let dir: string;
 
 beforeEach(() => {
-  // realpath so macOS's /var -> /private/var symlink doesn't mismatch the
-  // canonicalized paths normalizeRepoFilePath returns.
-  dir = realpathSync(mkdtempSync(join(tmpdir(), 'colony-claim-path-')));
+  // realpath.native so the canonicalized paths normalizeRepoFilePath returns
+  // match: macOS's /var -> /private/var symlink and Windows 8.3 short names
+  // (RUNNER~1 -> runneradmin) both resolve via realpathSync.native there.
+  dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'colony-claim-path-')));
 });
 
 afterEach(() => {
@@ -147,7 +148,11 @@ describe('normalizeRepoFilePath', () => {
     const outsideFile = join(dir, 'unknown-scope.ts');
     writeFileSync(outsideFile, 'export const unknown = true;\n');
 
-    expect(normalizeRepoFilePath(undefined, undefined, outsideFile)).toBe(outsideFile);
+    // normalizeRepoFilePath returns forward-slash paths (path.sep -> '/'),
+    // so compare against the slash-normalized form for Windows parity.
+    expect(normalizeRepoFilePath(undefined, undefined, outsideFile)).toBe(
+      outsideFile.split(sep).join('/'),
+    );
   });
 
   it('keeps normalizeClaimPath as the compatibility alias', () => {
