@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { quotaSafeOperatingContract } from '@colony/config';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { claudeCode } from '../src/claude-code.js';
+import { claudeCode, validateClaudeCodeInstall } from '../src/claude-code.js';
 import { codex, validateCodexInstall } from '../src/codex.js';
 import { cursor } from '../src/cursor.js';
 import { deepMerge } from '../src/fs-utils.js';
@@ -110,6 +110,38 @@ describe('claude-code installer', () => {
     for (const term of QUOTA_SAFE_CONTRACT_TERMS) {
       expect(quotaSafeOperatingContract).toContain(term);
     }
+  });
+
+  it('verify passes after install, fails before, and flags a stale hook', async () => {
+    const settingsPath = join(home, '.claude', 'settings.json');
+
+    // Before install: no settings.json → MCP + every hook missing → not ok.
+    // This is the path that previously threw because the claude-code installer
+    // had no verify() at all; it must now return a structured failure instead.
+    expect(validateClaudeCodeInstall(ctx).ok).toBe(false);
+
+    await claudeCode.install(ctx);
+    expect(await claudeCode.verify?.(ctx)).toMatchObject({
+      ok: true,
+      issues: [],
+      messages: expect.arrayContaining([expect.stringContaining(`verified ${settingsPath}`)]),
+    });
+
+    // Rewrite one hook command → still a recognised colony hook, but outdated.
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf8')) as {
+      hooks: Record<
+        string,
+        Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }>
+      >;
+    };
+    const stop = parsed.hooks.Stop?.[0]?.hooks?.[0];
+    expect(stop).toBeDefined();
+    if (stop) stop.command = `${stop.command} --stale`;
+    writeFileSync(settingsPath, JSON.stringify(parsed));
+
+    const stale = validateClaudeCodeInstall(ctx);
+    expect(stale.ok).toBe(false);
+    expect(stale.issues.some((issue) => issue.staleHooks?.includes('Stop'))).toBe(true);
   });
 
   it('writes hooks + mcpServer for a fresh install and is idempotent', async () => {

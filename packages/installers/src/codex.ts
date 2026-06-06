@@ -3,9 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readJson, shellQuote, writeJson } from './fs-utils.js';
 import {
-  type McpServerConfig,
   type McpServersConfig,
-  detectSystemOmxMcpServers,
   detectedOmxLayerMessages,
   installDetectedOmxLayer,
 } from './omx-layer.js';
@@ -15,6 +13,7 @@ import type {
   InstallValidationResult,
   Installer,
 } from './types.js';
+import { missingDetectedOmxServers, sameArgs, validationIssue } from './validation.js';
 
 interface CodexConfig {
   mcpServers?: McpServersConfig;
@@ -234,72 +233,6 @@ function codexHookStatus(
   }
 
   return sawColonyHook ? 'stale' : 'missing';
-}
-
-function sameArgs(actual: string[] | undefined, expected: string[]): boolean {
-  const actualArgs = actual ?? [];
-  if (actualArgs.length !== expected.length) return false;
-  return expected.every((value, index) => actualArgs[index] === value);
-}
-
-function missingDetectedOmxServers(current: McpServersConfig): string[] {
-  const missing: string[] = [];
-  for (const [name, expected] of Object.entries(detectSystemOmxMcpServers())) {
-    const actual = current[name];
-    if (!actual || !sameMcpServer(actual, expected)) missing.push(name);
-  }
-  return missing.sort((a, b) => a.localeCompare(b));
-}
-
-function sameMcpServer(actual: McpServerConfig, expected: McpServerConfig): boolean {
-  if (actual.command !== expected.command || !sameArgs(actual.args, expected.args ?? [])) {
-    return false;
-  }
-  return sameEnv(actual.env, expected.env);
-}
-
-function sameEnv(
-  actual: Record<string, string> | undefined,
-  expected: Record<string, string> | undefined,
-): boolean {
-  const actualEntries = Object.entries(actual ?? {}).sort();
-  const expectedEntries = Object.entries(expected ?? {}).sort();
-  return (
-    actualEntries.length === expectedEntries.length &&
-    expectedEntries.every(
-      ([key, value], index) =>
-        actualEntries[index]?.[0] === key && actualEntries[index]?.[1] === value,
-    )
-  );
-}
-
-function validationIssue(args: {
-  file: string;
-  missingHooks?: string[];
-  staleHooks?: string[];
-  missingMcpServers?: string[];
-}): InstallValidationIssue {
-  const parts: string[] = [];
-  if (args.missingHooks && args.missingHooks.length > 0) {
-    parts.push(`missing hooks: ${args.missingHooks.join(', ')}`);
-  }
-  if (args.staleHooks && args.staleHooks.length > 0) {
-    parts.push(`stale hooks: ${args.staleHooks.join(', ')}`);
-  }
-  if (args.missingMcpServers && args.missingMcpServers.length > 0) {
-    parts.push(`missing MCP servers: ${args.missingMcpServers.join(', ')}`);
-  }
-  return {
-    file: args.file,
-    message: parts.join('; '),
-    ...(args.missingHooks && args.missingHooks.length > 0
-      ? { missingHooks: args.missingHooks }
-      : {}),
-    ...(args.staleHooks && args.staleHooks.length > 0 ? { staleHooks: args.staleHooks } : {}),
-    ...(args.missingMcpServers && args.missingMcpServers.length > 0
-      ? { missingMcpServers: args.missingMcpServers }
-      : {}),
-  };
 }
 
 export function formatValidationFailure(result: InstallValidationResult): string {
