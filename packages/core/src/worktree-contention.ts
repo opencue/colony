@@ -216,7 +216,10 @@ function isGitWorktree(worktreePath: string): boolean {
 
 function canonicalPath(path: string): string {
   try {
-    return realpathSync(path);
+    // .native resolves macOS symlinks (/var -> /private/var) and expands
+    // Windows 8.3 short names to the long form git's --show-toplevel returns,
+    // so both sides of the isGitWorktree comparison agree.
+    return realpathSync.native(path);
   } catch {
     return resolve(path);
   }
