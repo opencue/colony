@@ -294,8 +294,11 @@ describe('coordination loop discovery', () => {
     const expectations: ToolExpectation[] = [
       {
         name: 'hivemind_context',
-        startsWith: /^Before editing/,
-        leadingPhrases: ['before editing', 'attention_inbox now', 'suggested_call'],
+        // Reframed from a "Before editing … now" mandate to a pull-when-it-helps
+        // description. Discoverability is preserved: the leading phrases still
+        // carry the searchable coordination terms, just without the imperative.
+        startsWith: /^Pull a compact coordination snapshot/,
+        leadingPhrases: ['coordination', 'suggested_call', 'attention_inbox', 'ownership'],
       },
       {
         name: 'attention_inbox',
