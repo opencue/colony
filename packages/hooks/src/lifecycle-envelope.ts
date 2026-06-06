@@ -644,12 +644,7 @@ function ideForAgent(agent: string): string {
 }
 
 function normalizeFilePath(value: string, cwd: string | undefined): string {
-  const resolved = path.isAbsolute(value)
-    ? path.normalize(value)
-    : path.resolve(cwd ?? process.cwd(), value);
-  // Emit forward-slash paths: cwd/repo_root are persisted envelope data and
-  // path.normalize/resolve produce '\' on Windows. Node fs accepts '/' there.
-  return resolved.replace(/\\/g, '/');
+  return path.isAbsolute(value) ? path.normalize(value) : path.resolve(cwd ?? process.cwd(), value);
 }
 
 function asRecord(value: unknown): JsonRecord | undefined {
