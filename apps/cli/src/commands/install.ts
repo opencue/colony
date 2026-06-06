@@ -16,9 +16,9 @@ import {
 import type { Command } from 'commander';
 import kleur from 'kleur';
 import { resolveCliPath } from '../util/resolve.js';
+import { wireColonySkill } from './skills.js';
 
 export const COLONY_CLI_INSTALL_COMMAND = 'npm install -g @imdeadpool/colony-cli';
-export const COLONY_SKILL_INSTALL_COMMAND = 'npx skills add recodeee/colony/skills/colony-mcp';
 
 export function registerInstallCommand(program: Command): void {
   program
@@ -26,7 +26,8 @@ export function registerInstallCommand(program: Command): void {
     .description('Register hooks + MCP server for an IDE')
     .option('--ide <name>', 'IDE to target', 'claude-code')
     .option('--verify', 'validate the IDE integration without writing config')
-    .action(async (opts: { ide: string; verify?: boolean }) => {
+    .option('--no-skills', 'skip wiring the Colony skill into the active cue profile')
+    .action(async (opts: { ide: string; verify?: boolean; skills?: boolean }) => {
       const name = opts.ide as IdeName;
       if (!installers[name]) {
         throw new Error(
@@ -78,12 +79,32 @@ export function registerInstallCommand(program: Command): void {
       );
       process.stdout.write(`  ${kleur.cyan('colony config show')}   see settings + docs\n\n`);
       process.stdout.write(`${kleur.bold('agent skill:')}\n`);
-      process.stdout.write(
-        `  ${kleur.cyan(COLONY_SKILL_INSTALL_COMMAND)}  teach agents the Colony MCP loop\n`,
-      );
+      // `--no-skills` and the COLONY_SKILL_WIRE=0 env both opt out (the env is
+      // how scripts/e2e-publish.sh keeps the isolated install deterministic —
+      // no shell-out to the user's real cue profile from a test).
+      const wireSkill = opts.skills !== false && process.env.COLONY_SKILL_WIRE !== '0';
+      if (!wireSkill) {
+        process.stdout.write(
+          `  ${kleur.dim('skipped — wire later with')} ${kleur.cyan('colony skills wire')}\n`,
+        );
+      } else {
+        // Auto-wire the Colony skill into the active cue profile so the agent
+        // discovers Colony as a pullable capability (loads on a real trigger),
+        // not a forced session preface. Best-effort: a missing cue is a soft
+        // no-op that prints the manual fallback, never a failed install.
+        const wired = wireColonySkill();
+        const glyph = wired.ok
+          ? kleur.green('✓')
+          : wired.cueDetected
+            ? kleur.yellow('·')
+            : kleur.dim('·');
+        process.stdout.write(`  ${glyph} ${wired.message}\n`);
+      }
       process.stdout.write(
         `${kleur.dim(
-          `${COLONY_CLI_INSTALL_COMMAND} installs the CLI; colony install wires MCP + hooks.`,
+          `${COLONY_CLI_INSTALL_COMMAND} installs the CLI; colony install wires MCP + hooks${
+            wireSkill ? ' + the cue skill' : ''
+          }.`,
         )}\n\n`,
       );
 
