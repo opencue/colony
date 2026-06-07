@@ -36,6 +36,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+        # Match CI: the importance perf smoke (50ms p95 @ 50k rows) is
+        # environment-sensitive on shared runners. Its documented escape hatch
+        # keeps it a local/manual check while the unit suite covers correctness.
+        env:
+          COLONY_SKIP_PERF: '1'
 
       # End-to-end check of the actual published artifact: pack, install -g
       # into an isolated prefix, drive every hook event, verify MCP launches,
