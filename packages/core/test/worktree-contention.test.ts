@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,9 +9,12 @@ import {
 } from '../src/worktree-contention.js';
 
 let dir = '';
+const extraCleanup: string[] = [];
 
 afterEach(() => {
   if (dir) rmSync(dir, { recursive: true, force: true });
+  for (const path of extraCleanup) rmSync(path, { recursive: true, force: true });
+  extraCleanup.length = 0;
   dir = '';
 });
 
@@ -134,6 +137,33 @@ describe('readWorktreeContentionReport', () => {
         ],
       }),
     ]);
+  });
+
+  it('counts managed worktrees when the repo is reached through a symlinked path', () => {
+    // Reproduces, on any platform, the macOS `/var -> /private/var` (and the
+    // Windows 8.3 short-name / case) condition that made CI red: git resolves
+    // symlinks in `rev-parse --show-toplevel`, so a merely-resolve()'d scan path
+    // must still match a realpath'd one. Before the fix this reported
+    // worktree_count: 0; the symlink hop is what exercises the realpath compare.
+    const realRoot = createRepo();
+    addWorktree(realRoot, '.omx', 'left', 'agent/codex/left');
+
+    const linkBase = mkdtempSync(join(tmpdir(), 'colony-worktree-link-'));
+    extraCleanup.push(linkBase);
+    const linkedTemp = join(linkBase, 'linked');
+    symlinkSync(dir, linkedTemp); // absolute symlink target, like /var -> /private/var
+    const linkedRepoRoot = join(linkedTemp, 'repo');
+
+    const report = readWorktreeContentionReport({
+      repoRoot: linkedRepoRoot,
+      now: Date.parse('2026-04-29T12:00:00.000Z'),
+    });
+
+    expect(report.inspected_roots).toContainEqual(
+      expect.objectContaining({ id: '.omx/agent-worktrees', exists: true, worktree_count: 1 }),
+    );
+    expect(report.summary.worktree_count).toBe(1);
+    expect(report.worktrees.map((worktree) => worktree.branch)).toContain('agent/codex/left');
   });
 
   it('resolves a managed worktree path back to the primary repository root', () => {

@@ -206,6 +206,21 @@ function inspectManagedRoot(args: {
   return worktrees;
 }
 
+// Canonicalise a path for cross-platform comparison. `resolve()` only makes a
+// path absolute — it does NOT resolve symlinks (macOS `/var` -> `/private/var`),
+// 8.3 short names, or case (Windows). `git rev-parse --show-toplevel` returns a
+// fully realpath'd path, so comparing it against a merely-resolved scan path
+// fails on macOS/Windows and drops every managed worktree (worktree_count 0).
+// realpath both sides so the comparison holds on every platform; fall back to
+// resolve when the path can't be stat'd (e.g. it was removed mid-scan).
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
 function isGitWorktree(worktreePath: string): boolean {
   const topLevel = gitText(['rev-parse', '--show-toplevel'], worktreePath);
   // git canonicalizes --show-toplevel (resolving symlinks like macOS's
