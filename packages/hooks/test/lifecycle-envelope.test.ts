@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import { defaultSettings } from '@colony/config';
 import { MemoryStore, TaskThread } from '@colony/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -52,8 +52,11 @@ describe('OMX lifecycle envelope', () => {
       session_id: 'codex@life',
       agent: 'codex',
       ide: 'codex',
-      cwd: '/repo/worktree',
-      repo_root: '/repo',
+      // normalizeFilePath runs path.normalize, which yields OS-native
+      // separators (backslashes on Windows); repo_root/cwd are used downstream
+      // as real fs/claim paths, so the envelope keeps them OS-native.
+      cwd: normalize('/repo/worktree'),
+      repo_root: normalize('/repo'),
       branch: 'agent/codex/life',
       tool_name: 'Edit',
       source: 'omx',

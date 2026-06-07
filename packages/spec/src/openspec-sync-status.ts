@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { MemoryStore } from '@colony/core';
 import type { ObservationRow, TaskRow } from '@colony/storage';
 
@@ -587,7 +587,9 @@ function verificationEvidence(value: unknown): string[] {
 }
 
 function resolveOpenSpecPath(repoRoot: string, path: string): string {
-  return path.startsWith('/') ? path : join(repoRoot, path);
+  // isAbsolute, not startsWith('/'): Windows absolute paths begin with a drive
+  // letter (C:\), so the POSIX-only check mis-joined an already-absolute path.
+  return isAbsolute(path) ? path : join(repoRoot, path);
 }
 
 function openspecChangeExists(repoRoot: string, path: string): boolean {
@@ -612,7 +614,9 @@ function archivedOpenSpecChangeExists(root: string, slug: string): boolean {
 }
 
 function relativePath(repoRoot: string, path: string): string {
-  return relative(repoRoot, path) || '.';
+  // Forward-slash for every OS: emitted into issue file_path fields that
+  // downstream consumers (and tests) compare against '/'-separated paths.
+  return (relative(repoRoot, path) || '.').replace(/\\/g, '/');
 }
 
 function includesNeedle(text: string, needle: string): boolean {

@@ -147,9 +147,15 @@ describe('MemoryStore.search()', () => {
     expect(hits.length).toBeGreaterThan(0);
   });
 
-  it('uses the Rust full-text layer when enabled', async () => {
-    process.env.COLONY_RUST_SEARCH = '1';
-    process.env.COLONY_RUST_SEARCH_BIN = fakeRustBinary(`
+  // The fake sidecar is a shebang .js script; Windows can't spawn a script
+  // directly (only .exe), so this success-path test is POSIX-only. The Windows
+  // fallback and required-unavailable paths are still covered below, and the
+  // real colony-search binary is a native .exe in production.
+  it.skipIf(process.platform === 'win32')(
+    'uses the Rust full-text layer when enabled',
+    async () => {
+      process.env.COLONY_RUST_SEARCH = '1';
+      process.env.COLONY_RUST_SEARCH_BIN = fakeRustBinary(`
 const fs = require('node:fs');
 const req = JSON.parse(fs.readFileSync(0, 'utf8'));
 fs.writeFileSync(1, JSON.stringify({
@@ -165,15 +171,16 @@ fs.writeFileSync(1, JSON.stringify({
 }));
 `);
 
-    const hits = await store.search('schema', 10, undefined, undefined, { rust: 'required' });
+      const hits = await store.search('schema', 10, undefined, undefined, { rust: 'required' });
 
-    expect(hits).toHaveLength(1);
-    expect(hits[0]).toMatchObject({
-      id: 2,
-      snippet: 'rust:schema',
-      score: 42,
-    });
-  });
+      expect(hits).toHaveLength(1);
+      expect(hits[0]).toMatchObject({
+        id: 2,
+        snippet: 'rust:schema',
+        score: 42,
+      });
+    },
+  );
 
   it('falls back to SQLite FTS when optional Rust search fails', async () => {
     process.env.COLONY_RUST_SEARCH = '1';

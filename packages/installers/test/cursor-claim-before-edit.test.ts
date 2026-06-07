@@ -7,12 +7,18 @@ import type { InstallContext } from '../src/types.js';
 
 let home: string;
 let originalHome: string | undefined;
+let originalUserProfile: string | undefined;
 let ctx: InstallContext;
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'colony-cursor-claim-'));
   originalHome = process.env.HOME;
   process.env.HOME = home;
+  // os.homedir() reads HOME on POSIX but USERPROFILE on Windows; redirect both
+  // so the installer's homedir()-based config paths land in the temp dir on
+  // every OS.
+  originalUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = home;
   ctx = {
     ideConfigDir: home,
     cliPath: '/fake/bin/colony.js',
@@ -24,6 +30,8 @@ beforeEach(() => {
 afterEach(() => {
   if (originalHome === undefined) delete process.env.HOME;
   else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
   rmSync(home, { recursive: true, force: true });
 });
 

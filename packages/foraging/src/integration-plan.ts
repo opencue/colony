@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { Storage } from '@colony/storage';
 import { FORAGING_CONCEPT_RULES, type ForagingConceptTag } from './concepts.js';
 import type { ForagedPattern, IntegrationPlan } from './types.js';
@@ -261,7 +261,7 @@ function resolveTargetManifestPath(repo_root: string, hint?: string): string {
   if (!hint) return join(repo_root, 'package.json');
   // Allow both absolute and repo-relative hints. Keep it simple: if it
   // looks absolute, use it as-is; otherwise join onto repo_root.
-  return hint.startsWith('/') ? hint : join(repo_root, hint);
+  return isAbsolute(hint) ? hint : join(repo_root, hint);
 }
 
 type PatternMeta = {

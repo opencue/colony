@@ -12,6 +12,7 @@ import type { InstallContext } from '../src/types.js';
 
 let home: string;
 let originalHome: string | undefined;
+let originalUserProfile: string | undefined;
 let ctx: InstallContext;
 const WRITE_TOOL_MATCHER = 'Edit|Write|MultiEdit|NotebookEdit|Bash|apply_patch|ApplyPatch|Patch';
 const QUOTA_SAFE_CONTRACT_TERMS = [
@@ -52,6 +53,11 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'colony-ins-'));
   originalHome = process.env.HOME;
   process.env.HOME = home;
+  // os.homedir() reads HOME on POSIX but USERPROFILE on Windows; redirect both
+  // so the installers' homedir()-based config paths land in the temp dir on
+  // every OS (without this the Windows runner wrote into the real profile).
+  originalUserProfile = process.env.USERPROFILE;
+  process.env.USERPROFILE = home;
   ctx = {
     ideConfigDir: home,
     cliPath: '/fake/bin/colony.js',
@@ -63,6 +69,8 @@ beforeEach(() => {
 afterEach(() => {
   if (originalHome === undefined) delete process.env.HOME;
   else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
   rmSync(home, { recursive: true, force: true });
 });
 

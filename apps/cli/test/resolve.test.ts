@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,7 +12,9 @@ afterEach(() => {
 });
 
 function makeTempRoot(): string {
-  root = mkdtempSync(join(tmpdir(), 'colony-resolve-'));
+  // resolveCliPath canonicalizes with realpathSync, so resolve the temp root
+  // the same way (macOS /var -> /private/var) or the derived paths won't match.
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'colony-resolve-')));
   return root;
 }
 

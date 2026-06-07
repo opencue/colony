@@ -183,7 +183,10 @@ function walk(
       } catch {
         continue;
       }
-      const rel = relative(root, abs);
+      // Emit forward-slash paths on every OS: path.relative returns '\' on
+      // Windows, but the food tree, entrypoints, and all downstream matching
+      // use '/' (matches normalizeFilePath in worktree-contention).
+      const rel = relative(root, abs).replace(/\\/g, '/');
       if (st.isDirectory()) {
         if (isBudgetExhausted(out, skipped, limits)) {
           skipped.push(skippedEntry(`${rel}/`, 'budget', st.size, 'directory'));

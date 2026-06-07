@@ -1616,10 +1616,13 @@ function collectBlockedDownstreamTasks(
   repoRoots: Set<string> | null,
 ): BlockedDownstreamTaskSignal[] {
   const out: BlockedDownstreamTaskSignal[] = [];
-  const plans =
-    repoRoots === null
-      ? listPlans(store, { limit: 2_000 })
-      : [...repoRoots].flatMap((repo_root) => listPlans(store, { repo_root, limit: 2_000 }));
+  // List all plans and filter by the resolved repo_root, mirroring the task
+  // filter in buildCoordinationSweep. Querying listPlans with an already-
+  // resolved repo_root breaks on Windows, where resolve('/repo') -> 'C:\\repo'
+  // won't match the unresolved repo_root stored on the plan.
+  const plans = listPlans(store, { limit: 2_000 }).filter(
+    (plan) => repoRoots === null || repoRoots.has(resolve(plan.repo_root)),
+  );
   for (const plan of plans) {
     for (const subtask of plan.subtasks) {
       if (subtask.status === 'completed' || subtask.blocked_by_count === 0) continue;
@@ -1651,10 +1654,13 @@ function collectStaleDownstreamBlockers(
   thresholds: CoordinationSweepResult['thresholds'],
 ): StaleDownstreamBlockerSignal[] {
   const out: StaleDownstreamBlockerSignal[] = [];
-  const plans =
-    repoRoots === null
-      ? listPlans(store, { limit: 2_000 })
-      : [...repoRoots].flatMap((repo_root) => listPlans(store, { repo_root, limit: 2_000 }));
+  // List all plans and filter by the resolved repo_root, mirroring the task
+  // filter in buildCoordinationSweep. Querying listPlans with an already-
+  // resolved repo_root breaks on Windows, where resolve('/repo') -> 'C:\\repo'
+  // won't match the unresolved repo_root stored on the plan.
+  const plans = listPlans(store, { limit: 2_000 }).filter(
+    (plan) => repoRoots === null || repoRoots.has(resolve(plan.repo_root)),
+  );
 
   for (const plan of plans) {
     for (const blocker of plan.subtasks) {
