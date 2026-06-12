@@ -167,7 +167,9 @@ export class SpecRepository {
     const archiveTarget = join(this.repoRoot, LAYOUT.archiveDir, `${date}-${slug}`);
     // Fail deterministically if the target exists. POSIX renameSync(dir, file)
     // throws ENOTDIR, but Windows MoveFileEx would silently clobber the file —
-    // so check explicitly rather than relying on rename to error.
+    // so check explicitly rather than relying on rename to error. This
+    // intentionally makes a same-day re-archive of the same slug fail:
+    // callers must treat "already exists" as already-archived, not retry.
     if (existsSync(archiveTarget)) {
       throw new Error(`archive target already exists: ${archiveTarget}`);
     }

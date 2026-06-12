@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import kleur from 'kleur';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProgram } from '../src/index.js';
@@ -9,6 +9,7 @@ import {
   defaultCockpitSessionName,
   formatCommand,
 } from '../src/lib/gitguardex.js';
+import { shellQuoteForTest } from './shell-quote-helper.js';
 
 let dataDir: string;
 let output: string;
@@ -42,7 +43,11 @@ describe('colony cockpit', () => {
     );
 
     expect(output).toContain('gitguardex cockpit dry-run');
-    expect(output).toContain('command: gx cockpit --target /work/colony --session colony-colony');
+    // --repo-root '/work/colony' resolves OS-natively (D:\work\colony on
+    // Windows) and quotes when the path leaves the shell-safe charset.
+    expect(output).toContain(
+      `command: gx cockpit --target ${shellQuoteForTest(resolve('/work/colony'))} --session colony-colony`,
+    );
     expect(output).toContain('next ready spawn commands:');
     expect(output).toContain('no ready Colony plan subtasks');
   });
@@ -69,8 +74,8 @@ describe('colony cockpit', () => {
 
     expect(JSON.parse(output)).toMatchObject({
       dry_run: true,
-      command: 'gx cockpit --target /work/colony --session ops',
-      repo_root: '/work/colony',
+      command: `gx cockpit --target ${shellQuoteForTest(resolve('/work/colony'))} --session ops`,
+      repo_root: resolve('/work/colony'),
       session_name: 'ops',
       next_spawn_commands: [],
     });
@@ -79,7 +84,9 @@ describe('colony cockpit', () => {
   it('quotes rendered paths and sessions for shell output', () => {
     expect(
       formatCommand('gx', buildGitGuardexCockpitCommand('/work/repo with space', 'ops cockpit')),
-    ).toBe("gx cockpit --target '/work/repo with space' --session 'ops cockpit'");
+    ).toBe(
+      `gx cockpit --target ${shellQuoteForTest(resolve('/work/repo with space'))} --session 'ops cockpit'`,
+    );
   });
 
   it('normalizes the default session name from the repo root', () => {
