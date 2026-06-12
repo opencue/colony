@@ -1246,7 +1246,9 @@ function collectActiveWorkingNotes(
         session_id: row.session_id,
         agent: agentBySession.get(row.session_id) ?? 'agent',
         ts: row.ts,
-        preview: row.content.slice(0, WORKING_NOTE_PREVIEW_CHARS),
+        // Normalize whitespace so multi-line note content cannot break
+        // single-line renderers (preface lines, compact inbox rows).
+        preview: row.content.slice(0, WORKING_NOTE_PREVIEW_CHARS).replace(/\s+/g, ' ').trim(),
       });
     }
   }
