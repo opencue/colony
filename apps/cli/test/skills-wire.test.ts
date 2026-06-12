@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   COLONY_CUE_SKILL_ID,
@@ -8,6 +8,29 @@ import {
   unwireColonySkill,
   wireColonySkill,
 } from '../src/commands/skills.js';
+
+// Cross-platform fake `cue`: a Node script plus a .cmd shim so Windows
+// spawn (which cannot exec shebang scripts) resolves it too.
+function writeFakeCue(dir: string): void {
+  const cuePath = join(dir, 'cue');
+  writeFileSync(
+    cuePath,
+    [
+      '#!/usr/bin/env node',
+      'const args = process.argv.slice(2);',
+      "if (args[0] === '--version') { process.stdout.write('0.0.0\\n'); process.exit(0); }",
+      "process.stdout.write('called: ' + args.join(' ') + '\\n');",
+      'process.exit(0);',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+}
+
+// The real `cue` CLI ships as a POSIX binary and the wirer spawns it via
+// execFileSync without a shell, which Windows cannot satisfy for extension-
+// less PATH stubs — run the cue-present integration tests on POSIX only.
+const POSIX = process.platform !== 'win32';
 
 describe('colony skills wire (cue auto-wiring)', () => {
   const originalPath = process.env.PATH;
@@ -41,18 +64,13 @@ describe('colony skills wire (cue auto-wiring)', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('invokes `cue skills add-to-profile <id>` when cue is present', () => {
+  it.runIf(POSIX)('invokes `cue skills add-to-profile <id>` when cue is present', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fake-cue-'));
-    const cuePath = join(dir, 'cue');
     // Stub cue: answer --version for detection, echo every other invocation so
     // the test can assert the exact subcommand the wirer shells out to.
-    writeFileSync(
-      cuePath,
-      '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo 0.0.0; exit 0; fi\necho "called: $*"\nexit 0\n',
-      { mode: 0o755 },
-    );
+    writeFakeCue(dir);
     try {
-      process.env.PATH = `${dir}:${originalPath ?? ''}`;
+      process.env.PATH = `${dir}${delimiter}${originalPath ?? ''}`;
       const result = wireColonySkill();
       expect(result.cueDetected).toBe(true);
       expect(result.ok).toBe(true);
@@ -62,16 +80,11 @@ describe('colony skills wire (cue auto-wiring)', () => {
     }
   });
 
-  it('passes --preview through in dry-run mode', () => {
+  it.runIf(POSIX)('passes --preview through in dry-run mode', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fake-cue-'));
-    const cuePath = join(dir, 'cue');
-    writeFileSync(
-      cuePath,
-      '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo 0.0.0; exit 0; fi\necho "called: $*"\nexit 0\n',
-      { mode: 0o755 },
-    );
+    writeFakeCue(dir);
     try {
-      process.env.PATH = `${dir}:${originalPath ?? ''}`;
+      process.env.PATH = `${dir}${delimiter}${originalPath ?? ''}`;
       const result = wireColonySkill({ dryRun: true });
       expect(result.message).toContain('add-to-profile colony/colony --preview');
     } finally {

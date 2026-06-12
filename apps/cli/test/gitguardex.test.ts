@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
+
 import { defaultSettings } from '@colony/config';
 import { MemoryStore, listPlans } from '@colony/core';
 import { type QueenOrderedPlanInput, publishOrderedPlan } from '@colony/queen';
@@ -12,7 +13,10 @@ import {
 } from '../src/executors/gitguardex.js';
 import { createProgram } from '../src/index.js';
 import { type GitGuardexExecFileSync, spawnGitGuardexAgent } from '../src/lib/gitguardex.js';
-
+// gx (gitguardex) is a POSIX tool; Windows cannot exec the PATH-stub shim
+// (execFileSync without shell rejects .cmd), so PATH-spawning integration
+// tests run on POSIX only.
+const POSIX = process.platform !== 'win32';
 const MINIMAL_SPEC = `# SPEC
 
 ## §G  goal
@@ -62,7 +66,7 @@ beforeEach(() => {
   originalGxStatus = process.env.GX_FAKE_AGENTS_STATUS;
   originalGxFailVersion = process.env.GX_FAKE_FAIL_VERSION;
   process.env.COLONY_HOME = dataDir;
-  process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`;
+  process.env.PATH = `${binDir}${delimiter}${process.env.PATH ?? ''}`;
   process.env.GX_FAKE_LOG = logPath;
   process.env.GX_FAKE_AGENTS_STATUS = JSON.stringify({
     schemaVersion: 1,
@@ -181,7 +185,7 @@ describe('GitGuardex executor CLI', () => {
     expect(output).toContain('--claim apps/cli/src/lib/gitguardex.ts');
   });
 
-  it('calls gx cockpit with repo target and colony session name', async () => {
+  it.runIf(POSIX)('calls gx cockpit with repo target and colony session name', async () => {
     await createProgram().parseAsync(['node', 'test', 'cockpit', '--repo-root', repoRoot], {
       from: 'node',
     });
@@ -249,7 +253,7 @@ describe('GitGuardex executor CLI', () => {
     });
   });
 
-  it('shows GitGuardex lanes in colony status', async () => {
+  it.runIf(POSIX)('shows GitGuardex lanes in colony status', async () => {
     process.env.GX_FAKE_AGENTS_STATUS = JSON.stringify({
       schemaVersion: 1,
       repoRoot,

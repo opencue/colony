@@ -296,6 +296,7 @@ export function mcpErrorResponse(
     | 'QUEEN_INVALID_GOAL'
     | 'RESCUE_CONFIRM_REQUIRED'
     | 'SESSION_NOT_FOUND'
+    | 'SPEC_ARCHIVE_ALREADY_EXISTS'
     | 'SPEC_ARCHIVE_CONFLICT'
     | 'TASK_LINK_SELF'
     | 'SCOUT_NO_CLAIM',

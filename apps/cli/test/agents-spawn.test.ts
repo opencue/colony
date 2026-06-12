@@ -12,6 +12,7 @@ import {
 } from '../src/executors/gitguardex.js';
 import { createProgram } from '../src/index.js';
 import { withStore } from '../src/util/store.js';
+import { shellQuoteForTest } from './shell-quote-helper.js';
 
 const MINIMAL_SPEC = `# SPEC
 
@@ -148,7 +149,7 @@ describe('colony agents spawn', () => {
     expect(output).toContain('Stop and hand off if quota or conflict');
     expect(output).toContain('Sibling files:\n- apps/cli/test/agents-spawn.test.ts');
     expect(output).toContain('Do-not-touch list:\n- apps/cli/test/agents-spawn.test.ts');
-    expect(output).toContain(`--target ${repoRoot}`);
+    expect(output).toContain(`--target ${shellQuoteForTest(repoRoot)}`);
     expect(output).toContain('--claim apps/cli/src/executors/gitguardex.ts');
     expect(existsSync(gxArgsFile)).toBe(false);
   });

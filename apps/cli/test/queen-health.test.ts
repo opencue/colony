@@ -11,6 +11,7 @@ import {
 import kleur from 'kleur';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildColonyHealthPayload, formatColonyHealthOutput } from '../src/commands/health.js';
+import { shellQuoteForTest } from './shell-quote-helper.js';
 
 const NOW = 1_800_000_000_000;
 const SINCE = NOW - 24 * 3_600_000;
@@ -441,7 +442,7 @@ describe('queen wave health', () => {
       state: 'archived',
       recommendation: {
         action: 'publish-new-plan',
-        command: `colony queen plan --repo-root ${repoRoot} "<goal>"`,
+        command: `colony queen plan --repo-root ${shellQuoteForTest(repoRoot)} "<goal>"`,
       },
     });
   });

@@ -165,6 +165,14 @@ export class SpecRepository {
   archiveChange(slug: string, date: string = todayIso()): string {
     const changeDir = dirname(this.changePath(slug));
     const archiveTarget = join(this.repoRoot, LAYOUT.archiveDir, `${date}-${slug}`);
+    // Fail deterministically if the target exists. POSIX renameSync(dir, file)
+    // throws ENOTDIR, but Windows MoveFileEx would silently clobber the file —
+    // so check explicitly rather than relying on rename to error. This
+    // intentionally makes a same-day re-archive of the same slug fail:
+    // callers must treat "already exists" as already-archived, not retry.
+    if (existsSync(archiveTarget)) {
+      throw new Error(`archive target already exists: ${archiveTarget}`);
+    }
     mkdirSync(dirname(archiveTarget), { recursive: true });
 
     // Stage: rename into a sibling `.archive-staging-<slug>` directory,
@@ -172,7 +180,15 @@ export class SpecRepository {
     // path exists at zero.
     const stagingPath = join(this.repoRoot, LAYOUT.archiveDir, `.staging-${slug}`);
     renameSync(changeDir, stagingPath);
-    renameSync(stagingPath, archiveTarget);
+    try {
+      renameSync(stagingPath, archiveTarget);
+    } catch (err) {
+      // Restore the change dir so a failed second rename never strands the
+      // change in .staging-* (a retry would then hit the exists guard and
+      // wrongly report already-archived).
+      renameSync(stagingPath, changeDir);
+      throw err;
+    }
     return archiveTarget;
   }
 

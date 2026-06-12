@@ -271,14 +271,29 @@ export function register(server: McpServer, ctx: ToolContext): void {
         reason: `Archive ${args.slug}: ${merge.applied} deltas applied, ${merge.conflicts.length} conflicts`,
       });
 
-      const archivePath = repo.archiveChange(args.slug);
+      let archivePath: string;
+      try {
+        archivePath = repo.archiveChange(args.slug);
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('archive target already exists')) {
+          // Same-day re-archive of the same slug: deterministic on every OS
+          // since archiveChange checks the target explicitly. Surface it as a
+          // structured "already done" rather than an opaque failure so retry
+          // loops can stop.
+          return mcpErrorResponse('SPEC_ARCHIVE_ALREADY_EXISTS', err.message, {
+            status: 'already_archived',
+            slug: args.slug,
+          });
+        }
+        throw err;
+      }
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify({
               status: 'archived',
-              archived_path: archivePath,
+              archived_path: archivePath.replace(/\\/g, '/'),
               merged_root_hash: merge.spec.rootHash,
               conflicts: merge.conflicts,
               applied: merge.applied,
