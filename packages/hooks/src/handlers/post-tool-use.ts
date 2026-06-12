@@ -36,6 +36,8 @@ type PathRef = { path: string; role?: string; kind?: string };
 export interface PostToolUseResult {
   extracted_paths: string[];
   warnings: string[];
+  /** One-line push-awareness note (another live session contends a touched file). */
+  context?: string;
 }
 
 export async function postToolUse(
@@ -100,7 +102,7 @@ export async function postToolUse(
   // (not predictive) — the agent doesn't have to know the claim system
   // exists for the claim system to protect its work. The next session that
   // touches the same file gets a warning in its UserPromptSubmit preface.
-  autoClaimFromToolUse(store, input);
+  const autoClaim = autoClaimFromToolUse(store, input);
 
   // Second, finer-grained side effect: leave an ambient pheromone trail.
   // Claims are binary ("who owns this now"); pheromones are graded
@@ -116,7 +118,58 @@ export async function postToolUse(
   // feeds the foraging algorithm for free.
   reinforceAdjacentProposals(store, input);
 
-  return { extracted_paths: touchedFiles, warnings };
+  // Push awareness: when this edit took over a file another session held,
+  // tell the agent NOW instead of waiting for the next turn's preface.
+  // Debounced through an observation marker so back-to-back edits in the
+  // same contention don't spam (hook processes are one-shot; in-memory
+  // debounce state would not survive between tool calls).
+  const context = buildContentionAwarenessNote(store, input, autoClaim.conflicts);
+
+  return {
+    extracted_paths: touchedFiles,
+    warnings,
+    ...(context !== null ? { context } : {}),
+  };
+}
+
+const AWARENESS_PUSH_KIND = 'awareness-push';
+const AWARENESS_PUSH_DEBOUNCE_MS = 2 * 60_000;
+const AWARENESS_PUSH_SCAN_LIMIT = 40;
+
+/**
+ * One-line mid-session contention note. Emitted at most once per
+ * AWARENESS_PUSH_DEBOUNCE_MS per session; the marker observation doubles as
+ * the debounce record and the audit trail. Best-effort: any storage failure
+ * returns null rather than degrading the hook.
+ */
+export function buildContentionAwarenessNote(
+  store: MemoryStore,
+  input: Pick<HookInput, 'session_id'>,
+  conflicts: Array<{ file_path: string; other_session: string }>,
+  now = Date.now(),
+): string | null {
+  const conflict = conflicts[0];
+  if (!conflict) return null;
+  try {
+    const recent = store.storage
+      .timeline(input.session_id, undefined, AWARENESS_PUSH_SCAN_LIMIT)
+      .some(
+        (row) => row.kind === AWARENESS_PUSH_KIND && row.ts >= now - AWARENESS_PUSH_DEBOUNCE_MS,
+      );
+    if (recent) return null;
+    const others = Array.from(new Set(conflicts.map((c) => c.other_session.slice(0, 8))));
+    const files = Array.from(new Set(conflicts.map((c) => c.file_path))).slice(0, 3);
+    const note = `[Colony] session ${others.join(', ')} recently claimed ${files.join(', ')} — you took over; coordinate via task_message before overlapping edits.`;
+    store.addObservation({
+      session_id: input.session_id,
+      kind: AWARENESS_PUSH_KIND,
+      content: note,
+      metadata: { kind: AWARENESS_PUSH_KIND, files, other_sessions: others },
+    });
+    return note;
+  } catch {
+    return null;
+  }
 }
 
 function lifecycleLinkMetadata(
@@ -505,7 +558,20 @@ export function autoClaimFromToolUse(
       observation_kind: 'auto-claim',
       record_conflict: true,
     });
-    if (!result.ok || result.status !== 'claimed') continue;
+    if (!result.ok) {
+      // A live owner blocked the auto-claim — the strongest contention
+      // signal there is. Surface it so the push-awareness note fires.
+      if (
+        (result.code === 'CLAIM_HELD_BY_ACTIVE_OWNER' ||
+          result.code === 'CLAIM_TAKEOVER_RECOMMENDED') &&
+        existing?.session_id &&
+        existing.session_id !== input.session_id
+      ) {
+        conflicts.push({ file_path, other_session: existing.session_id });
+      }
+      continue;
+    }
+    if (result.status !== 'claimed') continue;
     if (existing?.session_id && existing.session_id !== input.session_id) {
       conflicts.push({ file_path, other_session: existing.session_id });
     }

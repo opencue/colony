@@ -93,6 +93,7 @@ export async function runHook(
           const postToolUseResult = await postToolUse(store, input);
           extractedPaths = postToolUseResult.extracted_paths;
           warnings = postToolUseResult.warnings;
+          if (postToolUseResult.context) context = postToolUseResult.context;
         }
         break;
       case 'stop':

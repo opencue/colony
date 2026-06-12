@@ -90,7 +90,7 @@ function writeIdeOutput(hook: HookName, result: HookResult): void {
   const decisionReason = result.permissionDecisionReason?.trim() || ctx;
   if (!ctx && !decisionReason) return;
 
-  if (hook === 'session-start' || hook === 'user-prompt-submit') {
+  if (hook === 'session-start' || hook === 'user-prompt-submit' || hook === 'post-tool-use') {
     if (!ctx) return;
     const payload = {
       hookSpecificOutput: {
