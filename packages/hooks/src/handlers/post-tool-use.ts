@@ -96,7 +96,7 @@ export async function postToolUse(
       metadata: bashEventMetadata(tool, event),
     });
   }
-  applyBashRedirectAutoClaims(store, input, bashEvents);
+  const bashAutoClaims = applyBashRedirectAutoClaims(store, input, bashEvents);
 
   // Side effect: record a claim for every file this tool edited. Observed
   // (not predictive) — the agent doesn't have to know the claim system
@@ -123,7 +123,10 @@ export async function postToolUse(
   // Debounced through an observation marker so back-to-back edits in the
   // same contention don't spam (hook processes are one-shot; in-memory
   // debounce state would not survive between tool calls).
-  const context = buildContentionAwarenessNote(store, input, autoClaim.conflicts);
+  const context = buildContentionAwarenessNote(store, input, [
+    ...autoClaim.conflicts,
+    ...bashAutoClaims.conflicts,
+  ]);
 
   return {
     extracted_paths: touchedFiles,
@@ -134,7 +137,9 @@ export async function postToolUse(
 
 const AWARENESS_PUSH_KIND = 'awareness-push';
 const AWARENESS_PUSH_DEBOUNCE_MS = 2 * 60_000;
-const AWARENESS_PUSH_SCAN_LIMIT = 40;
+// 200 comfortably exceeds one turn's observation output, so the debounce
+// marker cannot scroll out of the window between contention events.
+const AWARENESS_PUSH_SCAN_LIMIT = 200;
 
 /**
  * One-line mid-session contention note. Emitted at most once per
@@ -266,7 +271,8 @@ function applyBashRedirectAutoClaims(
   store: MemoryStore,
   input: HookInput,
   events: BashCoordinationEvent[],
-): void {
+): { conflicts: Array<{ file_path: string; other_session: string }> } {
+  const conflicts: Array<{ file_path: string; other_session: string }> = [];
   const files = Array.from(
     new Set(events.flatMap((event) => (event.kind === 'auto-claim' ? [event.file_path] : []))),
   );
@@ -281,10 +287,11 @@ function applyBashRedirectAutoClaims(
     };
     if (typeof input.ide === 'string') syntheticWrite.ide = input.ide;
     if (typeof input.cwd === 'string') syntheticWrite.cwd = input.cwd;
-    autoClaimFromToolUse(store, syntheticWrite);
+    conflicts.push(...autoClaimFromToolUse(store, syntheticWrite).conflicts);
     depositPheromoneFromToolUse(store, syntheticWrite);
     reinforceAdjacentProposals(store, syntheticWrite);
   }
+  return { conflicts };
 }
 
 function bashEventContent(event: BashCoordinationEvent): string {
