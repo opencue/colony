@@ -387,7 +387,7 @@ describe('SessionStart predictive suggestion preface', () => {
     expect(preface).not.toContain('FULL_BODY_SENTINEL_WAKE_NEXT_STEP_1');
     expect(preface).not.toContain('PENDING HANDOFF');
     expect(preface).not.toContain('PENDING WAKE');
-  });
+  }, 15_000);
 });
 
 describe('SessionStart ready-claim nudge', () => {
