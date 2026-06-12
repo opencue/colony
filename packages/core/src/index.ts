@@ -335,6 +335,9 @@ export {
   type CocoIndexSessionSourceOptions,
 } from './cocoindex-session-source.js';
 export { buildDiscrepancyReport, type DiscrepancyReport } from './discrepancy.js';
+// Re-exported so downstream packages (hooks) can budget text without taking a
+// direct @colony/compress dependency — core already owns that edge.
+export { countTokens } from '@colony/compress';
 export { isPseudoClaimPath, normalizeClaimPath, normalizeRepoFilePath } from '@colony/storage';
 export type { ClaimPathContext, RepoFilePathContext } from '@colony/storage';
 export type {

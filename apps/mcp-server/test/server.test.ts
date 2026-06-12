@@ -1539,12 +1539,25 @@ describe('MCP server', () => {
     }
   });
 
-  it('get_observations returns expanded text by default and preserves tech tokens', async () => {
+  it('get_observations honors compression.expandForModel (default false → compressed) and preserves tech tokens', async () => {
     const { a } = await seed();
     const res = await client.callTool({ name: 'get_observations', arguments: { ids: [a] } });
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '[]';
     const rows = JSON.parse(text) as Array<{ id: number; content: string }>;
     expect(rows).toHaveLength(1);
+    expect(rows[0]?.content).toContain('/etc/caveman.conf');
+    // Default is the compressed stored form: 'db' stays abbreviated.
+    expect(rows[0]?.content).not.toMatch(/database/);
+  });
+
+  it('get_observations with expand=true returns expanded text', async () => {
+    const { a } = await seed();
+    const res = await client.callTool({
+      name: 'get_observations',
+      arguments: { ids: [a], expand: true },
+    });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '[]';
+    const rows = JSON.parse(text) as Array<{ id: number; content: string }>;
     expect(rows[0]?.content).toContain('/etc/caveman.conf');
     expect(rows[0]?.content).toMatch(/database/);
   });

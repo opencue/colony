@@ -6,6 +6,7 @@ import { type Embedder, MemoryStore, TaskThread } from '@colony/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type SuggestionPrefaceDeps,
+  applyPrefaceTokenBudget,
   buildReadyClaimNudgePreface,
   claimForagingSessionStartScan,
   sessionStart,
@@ -211,7 +212,7 @@ describe('SessionStart predictive suggestion preface', () => {
   it('injects the legacy verbose contract when sessionStart.contractMode is full', async () => {
     resetStoreWithSettings({
       ...store.settings,
-      sessionStart: { contractMode: 'full' },
+      sessionStart: { contractMode: 'full', prefaceTokenBudget: 800 },
     });
     const preface = await sessionStart(
       store,
@@ -229,7 +230,7 @@ describe('SessionStart predictive suggestion preface', () => {
   it('omits the contract section when sessionStart.contractMode is none', async () => {
     resetStoreWithSettings({
       ...store.settings,
-      sessionStart: { contractMode: 'none' },
+      sessionStart: { contractMode: 'none', prefaceTokenBudget: 800 },
     });
     const preface = await sessionStart(
       store,
@@ -467,5 +468,52 @@ describe('SessionStart ready-claim nudge', () => {
   it('does not nudge when no cwd is provided', () => {
     seedAvailableSubtask('nudge-target');
     expect(buildReadyClaimNudgePreface(store, {})).toBe('');
+  });
+});
+
+describe('applyPrefaceTokenBudget', () => {
+  const section = (name: string, words: number, priority: number) => ({
+    name,
+    text: `${name} ${'word '.repeat(words).trim()}`,
+    priority,
+  });
+
+  it('returns all sections joined when under budget', () => {
+    const out = applyPrefaceTokenBudget([section('a', 5, 2), section('b', 5, 1)], 800);
+    expect(out).toContain('a word');
+    expect(out).toContain('b word');
+    expect(out).not.toContain('preface trimmed');
+  });
+
+  it('drops lowest-priority sections first and names them in a trailer', () => {
+    const out = applyPrefaceTokenBudget(
+      [section('contract', 30, 1), section('task', 30, 2), section('foraging', 200, 8)],
+      100,
+    );
+    expect(out).toContain('contract word');
+    expect(out).toContain('task word');
+    expect(out).not.toContain('foraging word');
+    expect(out).toContain('preface trimmed');
+    expect(out).toContain('dropped: foraging');
+  });
+
+  it('keeps the highest-priority section even when it alone exceeds the budget', () => {
+    const out = applyPrefaceTokenBudget([section('contract', 500, 1), section('task', 5, 2)], 50);
+    expect(out).toContain('contract word');
+    expect(out).toContain('dropped: task');
+  });
+
+  it('preserves display order for surviving sections regardless of priority', () => {
+    const out = applyPrefaceTokenBudget(
+      [section('later-display-high-prio', 5, 1), section('zz-low', 5, 9)],
+      800,
+    );
+    expect(out.indexOf('later-display-high-prio')).toBeLessThan(out.indexOf('zz-low'));
+  });
+
+  it('budget 0 disables trimming', () => {
+    const out = applyPrefaceTokenBudget([section('a', 2000, 9)], 0);
+    expect(out).toContain('a word');
+    expect(out).not.toContain('preface trimmed');
   });
 });

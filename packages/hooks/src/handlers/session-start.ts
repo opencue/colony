@@ -17,6 +17,7 @@ import {
   TaskThread,
   applyAttentionBudget,
   buildAttentionInbox,
+  countTokens,
   detectRepoBranch,
   listPlans,
 } from '@colony/core';
@@ -112,19 +113,63 @@ export async function sessionStart(
   const attentionBudgetPreface = buildAttentionBudgetSection(store, input);
   const readyClaimNudgePreface = buildReadyClaimNudgePreface(store, input);
 
-  return [
-    priorPreface,
-    quotaSafePreface,
-    taskPreface,
-    suggestionPreface,
-    proposalPreface,
-    foragingPreface,
-    scopeCheckPreface,
-    attentionBudgetPreface,
-    readyClaimNudgePreface,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  // Priority is the trim order under the global budget, NOT the display
+  // order: lowest-priority sections drop first when the assembled preface
+  // would exceed the token budget. Display order stays stable above.
+  return applyPrefaceTokenBudget(
+    [
+      { name: 'prior-sessions', text: priorPreface, priority: 6 },
+      { name: 'contract', text: quotaSafePreface, priority: 1 },
+      { name: 'task', text: taskPreface, priority: 2 },
+      { name: 'suggestions', text: suggestionPreface, priority: 7 },
+      { name: 'proposals', text: proposalPreface, priority: 5 },
+      { name: 'foraging', text: foragingPreface, priority: 8 },
+      { name: 'scope-check', text: scopeCheckPreface, priority: 9 },
+      { name: 'attention', text: attentionBudgetPreface, priority: 4 },
+      { name: 'ready-claim', text: readyClaimNudgePreface, priority: 3 },
+    ],
+    store.settings.sessionStart.prefaceTokenBudget,
+  );
+}
+
+export interface PrefaceSection {
+  name: string;
+  text: string;
+  /** 1 = most important; higher numbers drop first when over budget. */
+  priority: number;
+}
+
+/**
+ * Enforce a global token budget over the SessionStart preface. Sections are
+ * admitted in priority order until the budget is exhausted, then rendered in
+ * their original display order. The highest-priority non-empty section always
+ * survives — a contract pointer is better than an empty preface. Dropped
+ * sections are summarised in one trailer line so the trim is never silent.
+ * Budget <= 0 disables trimming.
+ */
+export function applyPrefaceTokenBudget(sections: PrefaceSection[], budget: number): string {
+  const nonEmpty = sections.filter((s) => s.text);
+  if (nonEmpty.length === 0) return '';
+  const joinAll = nonEmpty.map((s) => s.text).join('\n\n');
+  if (budget <= 0 || countTokens(joinAll) <= budget) return joinAll;
+
+  const byPriority = [...nonEmpty].sort((a, b) => a.priority - b.priority);
+  const kept = new Set<PrefaceSection>();
+  let spent = 0;
+  for (const section of byPriority) {
+    const cost = countTokens(section.text);
+    if (kept.size > 0 && spent + cost > budget) continue;
+    kept.add(section);
+    spent += cost;
+  }
+  const dropped = nonEmpty.filter((s) => !kept.has(s));
+  const rendered = nonEmpty.filter((s) => kept.has(s)).map((s) => s.text);
+  if (dropped.length > 0) {
+    rendered.push(
+      `(preface trimmed to ~${budget} tokens; dropped: ${dropped.map((s) => s.name).join(', ')})`,
+    );
+  }
+  return rendered.join('\n\n');
 }
 
 export function buildQuotaSafeOperatingPreface(
@@ -395,6 +440,20 @@ function formatDuration(ms: number): string {
   return `${Math.round(hours / 24)}d`;
 }
 
+// A prior-session summary is a hint, not a transcript: stored summaries have
+// no write-time length bound, and one verbose session could otherwise eat the
+// whole preface budget on its own.
+const PRIOR_SUMMARY_CHAR_CAP = 300;
+
+function truncateAtCap(text: string, cap: number): string {
+  if (text.length <= cap) return text;
+  let end = cap;
+  // Back off a lone high surrogate so the cut never splits a code point.
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
+
 function buildPriorPreface(store: MemoryStore, input: HookInput): string {
   // For resume/clear/compact the agent already has its own context; injecting
   // a "Prior-session context" preface would be noisy and possibly stale.
@@ -405,7 +464,7 @@ function buildPriorPreface(store: MemoryStore, input: HookInput): string {
     .slice(0, 3)
     .map((s) => {
       const summaries = store.storage.listSummaries(s.id).slice(0, 1);
-      return summaries.map((x) => x.content).join('\n');
+      return truncateAtCap(summaries.map((x) => x.content).join('\n'), PRIOR_SUMMARY_CHAR_CAP);
     })
     .filter(Boolean);
   if (hints.length === 0) return '';
