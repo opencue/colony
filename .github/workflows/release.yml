@@ -26,6 +26,12 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://registry.npmjs.org'
 
+      # npm OIDC trusted publishing needs npm >= 11.5.1; Node 20 bundles 10.x.
+      # With no NPM_TOKEN secret, changesets/action falls back to OIDC — which
+      # only works once the npm CLI can mint the id-token AND the colonyq
+      # package on npmjs.com lists this repo/workflow as a trusted publisher.
+      - run: npm install -g npm@^11.5.1
+
       - run: pnpm install --frozen-lockfile
 
       # Build first — every package's exports point to ./dist/, and the unit
