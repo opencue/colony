@@ -394,7 +394,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
 
   server.tool(
     'task_plan_list',
-    'Find available plan sub-tasks, rollups, or next work. Lists registered plans (and, by default, surfaces on-disk plan workspaces that have not been published yet, marked with registry_status="unpublished") with status counts, next_available work, capability_match, and unclaimed routing. Workers cannot claim from unpublished plans — surface them so the orchestrator notices and runs `colony plan publish <slug>`. Defaults to a compact rollup shape; pass detail="full" for descriptions and file_scope.',
+    'Find available plan sub-tasks, rollups, or next work. Lists registered plans with status counts, next_available work, capability_match, and unclaimed routing; unpublished on-disk workspaces appear with registry_status="unpublished" and need `colony plan publish <slug>` before workers can claim. Compact rollup by default; detail="full" adds descriptions and file_scope.',
     {
       repo_root: z.string().min(1).optional(),
       only_with_available_subtasks: z.boolean().optional(),

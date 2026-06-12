@@ -15,7 +15,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
 
   server.tool(
     'attention_inbox',
-    'See what needs your attention after hivemind_context: handoffs, unread messages, blockers, stalled lanes, recent claims, stale claim cleanup signals, and decaying hot files. Defaults to a compact payload (counts + observation_ids); pass format="full" when you actually need every body inline. Also surfaces quota-pending claim relays before work selection; weak-expired quota claims stay hidden unless audit=true is set. Expired handoffs are not surfaced as pending recruitment signals. This is the main surface where task_message items show up; unread message entries (in the full payload) include reply_tool=task_message, suggested_reply_args, and mark_read_tool=task_message_mark_read hints, with next_action for blocking/needs_reply items. Review compact IDs first, then fetch full bodies with get_observations only when needed.',
+    'See what needs your attention after hivemind_context: handoffs, unread messages, blockers, stalled lanes, recent claims, stale claim cleanup signals, and decaying hot files. Compact by default (counts + observation_ids); format="full" inlines bodies with reply_tool=task_message, suggested_reply_args, and mark_read_tool=task_message_mark_read hints; audit=true adds weak-expired quota claims. Expired handoffs are not surfaced as pending. This is the main surface where task_message items show up; fetch bodies via get_observations.',
     {
       session_id: z.string().min(1),
       agent: z.string().min(1),

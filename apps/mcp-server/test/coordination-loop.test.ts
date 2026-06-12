@@ -730,12 +730,15 @@ describe('coordination loop discovery', () => {
       current_task: 'Prove bridge model path',
       attention_counts: expect.objectContaining({ unread_message_count: 1, blocked: true }),
       ready_work_count: 1,
-      claimed_file_preview: [
+      // Both claims land in the same millisecond, so claim ordering is a
+      // timestamp tie — compare as a set, not a sequence.
+      claimed_file_preview: expect.arrayContaining([
         'apps/mcp-server/src/tools/hivemind.ts',
         'apps/mcp-server/test/coordination-loop.test.ts',
-      ],
+      ]),
       latest_note_id: note.id,
     });
+    expect(status.claimed_file_preview).toHaveLength(2);
 
     const compactPayload = JSON.stringify({
       initialContext,
