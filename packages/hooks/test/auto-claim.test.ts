@@ -666,7 +666,9 @@ describe('autoClaimFromToolUse', () => {
       tool_input: { file_path: 'src/viewer.tsx' },
     });
     expect(result.claimed).toEqual([]);
-    expect(result.conflicts).toEqual([]);
+    // The blocked takeover is REPORTED (it feeds the push-awareness note)
+    // even though no claim and no claim-conflict observation are written.
+    expect(result.conflicts).toEqual([{ file_path: 'src/viewer.tsx', other_session: 'A' }]);
     expect(store.storage.getClaim(task_id, 'src/viewer.tsx')?.session_id).toBe('A');
     const conflicts = store.storage.taskObservationsByKind(task_id, 'claim-conflict');
     expect(conflicts).toHaveLength(0);
