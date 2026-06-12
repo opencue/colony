@@ -293,7 +293,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
             type: 'text',
             text: JSON.stringify({
               status: 'archived',
-              archived_path: archivePath,
+              archived_path: archivePath.replace(/\\/g, '/'),
               merged_root_hash: merge.spec.rootHash,
               conflicts: merge.conflicts,
               applied: merge.applied,

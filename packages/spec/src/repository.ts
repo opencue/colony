@@ -180,7 +180,15 @@ export class SpecRepository {
     // path exists at zero.
     const stagingPath = join(this.repoRoot, LAYOUT.archiveDir, `.staging-${slug}`);
     renameSync(changeDir, stagingPath);
-    renameSync(stagingPath, archiveTarget);
+    try {
+      renameSync(stagingPath, archiveTarget);
+    } catch (err) {
+      // Restore the change dir so a failed second rename never strands the
+      // change in .staging-* (a retry would then hit the exists guard and
+      // wrongly report already-archived).
+      renameSync(stagingPath, changeDir);
+      throw err;
+    }
     return archiveTarget;
   }
 

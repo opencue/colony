@@ -834,7 +834,9 @@ function execGx(execFileSync: GitGuardexExecFileSync, args: string[], cwd: strin
 }
 
 function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(value)) return value;
+  // Same safe charset as health.ts/sweep.ts shellQuote (and the test
+  // helper apps/cli/test/shell-quote-helper.ts) — keep all copies aligned.
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 

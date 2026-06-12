@@ -2,10 +2,6 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 
-// gx (gitguardex) is a POSIX tool; Windows cannot exec the PATH-stub shim
-// (execFileSync without shell rejects .cmd), so PATH-spawning integration
-// tests run on POSIX only.
-const POSIX = process.platform !== 'win32';
 import { defaultSettings } from '@colony/config';
 import { MemoryStore, listPlans } from '@colony/core';
 import { type QueenOrderedPlanInput, publishOrderedPlan } from '@colony/queen';
@@ -17,7 +13,10 @@ import {
 } from '../src/executors/gitguardex.js';
 import { createProgram } from '../src/index.js';
 import { type GitGuardexExecFileSync, spawnGitGuardexAgent } from '../src/lib/gitguardex.js';
-
+// gx (gitguardex) is a POSIX tool; Windows cannot exec the PATH-stub shim
+// (execFileSync without shell rejects .cmd), so PATH-spawning integration
+// tests run on POSIX only.
+const POSIX = process.platform !== 'win32';
 const MINIMAL_SPEC = `# SPEC
 
 ## §G  goal
