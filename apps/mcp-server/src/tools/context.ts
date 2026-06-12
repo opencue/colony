@@ -1,4 +1,4 @@
-import type { Settings } from '@colony/config';
+import type { McpToolProfile, Settings } from '@colony/config';
 import type { Embedder, MemoryStore, WorktreeContentionReport } from '@colony/core';
 
 export type ToolHandlerWrapper = <Args extends unknown[], Result>(
@@ -12,6 +12,8 @@ export const defaultWrapHandler: ToolHandlerWrapper = (_name, handler) => handle
 export interface ToolContext {
   store: MemoryStore;
   settings: Settings;
+  /** Active MCP tool surface. Absent means 'full' (direct register() callers in tests). */
+  toolProfile?: McpToolProfile;
   planValidation?: PlanValidationRuntime;
   /**
    * Lazy-singleton embedder. Returns null when the provider is `none` or the

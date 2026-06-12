@@ -39,9 +39,11 @@ import * as spec from './tools/spec.js';
 import * as startupPanel from './tools/startup-panel.js';
 import * as suggest from './tools/suggest.js';
 import * as task from './tools/task.js';
+import { LEAN_TOOLS, gateToolRegistration, resolveToolProfile } from './tools/tool-profile.js';
 
 export { buildBridgeStatusPayload } from './tools/bridge.js';
 export type { BridgeStatus, BridgeStatusOptions } from './tools/bridge.js';
+export { LEAN_TOOLS, resolveToolProfile } from './tools/tool-profile.js';
 
 /**
  * MCP stdio server exposing progressive-disclosure tools:
@@ -57,12 +59,20 @@ export type { BridgeStatus, BridgeStatusOptions } from './tools/bridge.js';
 export function buildServer(
   store: MemoryStore,
   settings: Settings,
-  options: Pick<ToolContext, 'planValidation'> = {},
+  options: Pick<ToolContext, 'planValidation' | 'toolProfile'> = {},
 ): McpServer {
   const server = new McpServer({
     name: 'colony',
     version: '0.1.0',
   });
+
+  // lean (default) registers only LEAN_TOOLS — every registered tool costs
+  // every agent session schema-injection context whether or not it is called.
+  // COLONY_TOOL_PROFILE=full (or settings.mcp.toolProfile) restores the
+  // whole surface for plan/spec/queen lanes.
+  const toolProfile = options.toolProfile ?? resolveToolProfile(settings);
+  const registrar =
+    toolProfile === 'lean' ? gateToolRegistration(server, (name) => LEAN_TOOLS.has(name)) : server;
 
   // Make this MCP client visible to hivemind even when the IDE never ran
   // colony's lifecycle hooks (codex, custom MCP clients, background tools).
@@ -91,6 +101,7 @@ export function buildServer(
   const ctx: ToolContext = {
     store,
     settings,
+    toolProfile,
     ...(options.planValidation !== undefined ? { planValidation: options.planValidation } : {}),
     resolveEmbedder,
     // Heartbeat outer touches the active-session row before the handler runs;
@@ -100,60 +111,62 @@ export function buildServer(
   };
 
   // Registration order mirrors the pre-split monolithic server.ts so existing
-  // MCP inspector fixtures and snapshot tests stay stable.
-  search.register(server, ctx);
-  hivemind.register(server, ctx);
-  task.register(server, ctx);
-  accountClaims.register(server, ctx);
-  handoff.register(server, ctx);
-  proposal.register(server, ctx);
-  profile.register(server, ctx);
-  attention.register(server, ctx);
+  // MCP inspector fixtures and snapshot tests stay stable. Every module
+  // registers through `registrar`, which drops non-lean tools when the lean
+  // profile is active — gating lives in tool-profile.ts, not in the modules.
+  search.register(registrar, ctx);
+  hivemind.register(registrar, ctx);
+  task.register(registrar, ctx);
+  accountClaims.register(registrar, ctx);
+  handoff.register(registrar, ctx);
+  proposal.register(registrar, ctx);
+  profile.register(registrar, ctx);
+  attention.register(registrar, ctx);
   // task_foraging_report lives in foraging.ts (foraging surface) but stays in
   // the slot it occupied when it was bundled inside attention.ts, so the
   // listTools ordering above does not shift.
-  registerTaskForagingReport(server, ctx);
-  bridge.register(server, ctx);
-  message.register(server, ctx);
-  relay.register(server, ctx);
-  plan.register(server, ctx);
-  queen.register(server, ctx);
-  planValidate.register(server, ctx);
-  readyQueue.register(server, ctx);
-  startupPanel.register(server, ctx);
-  recall.register(server, ctx);
-  suggest.register(server, ctx);
-  rescue.register(server, ctx);
-  savings.register(server, ctx);
-  savingsDrift.register(server, ctx);
+  registerTaskForagingReport(registrar, ctx);
+  bridge.register(registrar, ctx);
+  message.register(registrar, ctx);
+  relay.register(registrar, ctx);
+  plan.register(registrar, ctx);
+  queen.register(registrar, ctx);
+  planValidate.register(registrar, ctx);
+  readyQueue.register(registrar, ctx);
+  startupPanel.register(registrar, ctx);
+  recall.register(registrar, ctx);
+  suggest.register(registrar, ctx);
+  rescue.register(registrar, ctx);
+  savings.register(registrar, ctx);
+  savingsDrift.register(registrar, ctx);
 
   // ICM slice 2 feedback lane (docs/icm-integration-plan.md). Registered
   // after the read-side surfaces so the heartbeat wrapper has seen every
   // core tool first.
-  feedback.register(server, ctx);
+  feedback.register(registrar, ctx);
 
   // Autopilot lane (tick advisor + drift checker). Cheap compositions of
   // existing primitives; registered after the core surface so the heartbeat
   // wrapper has already wrapped the tools they delegate to.
-  autopilot.register(server, ctx);
-  drift.register(server, ctx);
+  autopilot.register(registrar, ctx);
+  drift.register(registrar, ctx);
 
   // Spec-driven dev lane (@colony/spec). Adds spec_read, spec_change_open,
   // spec_change_add_delta, spec_build_context, spec_build_record_failure,
   // spec_archive. Registered last so the heartbeat wrapper has seen every
   // core tool first.
-  spec.register(server, ctx);
+  spec.register(registrar, ctx);
 
   // Foraging lane (@colony/foraging). Adds examples_list, examples_query,
   // examples_integrate_plan. Registered after spec so the heartbeat has
   // wrapped the earlier tools before we bind these three.
-  foraging.register(server, ctx);
+  foraging.register(registrar, ctx);
 
   // Memoirs lane (ICM-inspired typed knowledge graphs). Adds memoir_create,
   // memoir_list, memoir_add_concept, memoir_refine, memoir_link,
   // memoir_search, memoir_inspect. Registered last so heartbeat + metrics
   // wrappers have already wrapped the core surface.
-  memoirs.register(server, ctx);
+  memoirs.register(registrar, ctx);
 
   return server;
 }

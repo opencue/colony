@@ -15,6 +15,9 @@ export type NotifyLevel = z.infer<typeof NotifyLevel>;
 export const BridgePolicyMode = z.enum(['warn', 'block-on-conflict', 'audit-only']);
 export type BridgePolicyMode = z.infer<typeof BridgePolicyMode>;
 
+export const McpToolProfile = z.enum(['lean', 'full']);
+export type McpToolProfile = z.infer<typeof McpToolProfile>;
+
 export const DEFAULT_PROTECTED_FILES = [
   'packages/storage/src/storage.ts',
   'packages/storage/src/schema.ts',
@@ -241,6 +244,14 @@ export const SettingsSchema = z
       .describe(
         'Background notifications. The worker uses this to surface conditions you would otherwise only see by reading stderr or running `colony status`.',
       ),
+    mcp: z
+      .object({
+        toolProfile: McpToolProfile.default('lean').describe(
+          'Which MCP tool surface the stdio server registers. lean = ~20 high-traffic memory + coordination tools (default; saves 10k+ context tokens per agent session). full = all tools including plan, spec, foraging, memoir, proposal, and savings lanes. Override per-process with COLONY_TOOL_PROFILE=lean|full.',
+        ),
+      })
+      .default({ toolProfile: 'lean' })
+      .describe('MCP server surface controls.'),
     bridge: z
       .object({
         writeOmxNotepadPointer: z
