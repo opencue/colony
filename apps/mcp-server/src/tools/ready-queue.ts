@@ -465,6 +465,7 @@ export async function buildReadyForAgent(
         ),
     ),
     role,
+    store.settings.coordinationMode,
   );
   const currentClaims = filterReadyForExecutor(
     plans.flatMap((plan) =>
@@ -491,6 +492,7 @@ export async function buildReadyForAgent(
         ),
     ),
     role,
+    store.settings.coordinationMode,
   );
   const urgentTaskIds = blockingMessageTaskIds(store, {
     session_id: args.session_id,

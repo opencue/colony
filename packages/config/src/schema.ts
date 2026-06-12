@@ -18,6 +18,9 @@ export type BridgePolicyMode = z.infer<typeof BridgePolicyMode>;
 export const McpToolProfile = z.enum(['lean', 'full']);
 export type McpToolProfile = z.infer<typeof McpToolProfile>;
 
+export const CoordinationMode = z.enum(['open', 'guarded']);
+export type CoordinationMode = z.infer<typeof CoordinationMode>;
+
 export const DEFAULT_PROTECTED_FILES = [
   'packages/storage/src/storage.ts',
   'packages/storage/src/schema.ts',
@@ -76,6 +79,9 @@ export const SettingsSchema = z
       })
       .default({ activeSessionReconcileMinIntervalMs: 5_000 })
       .describe('Runtime load-shedding controls for multi-agent coordination surfaces.'),
+    coordinationMode: CoordinationMode.default('open').describe(
+      'open (default) = advisory coordination: role gates (scout-no-claim, executor-cannot-propose, proposal caps, executor proposal filtering) are lifted and claim conflicts succeed with loud contention info instead of erroring. guarded = strict enforcement (the historical behavior). Queen-only proposal approval, subtask completion ownership, and protected-branch claim rejection stay hard in both modes.',
+    ),
     rejectProtectedBranchClaims: z
       .boolean()
       .default(true)

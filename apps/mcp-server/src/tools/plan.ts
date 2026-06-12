@@ -450,6 +450,10 @@ export function register(server: McpServer, ctx: ToolContext): void {
       agent: z.string().min(1),
       repo_root: z.string().min(1).optional(),
       file_scope: z.array(z.string().min(1)).optional(),
+      force: z
+        .boolean()
+        .optional()
+        .describe('Claim even when depends_on sub-tasks are incomplete; records an audit note.'),
     },
     wrapHandler('task_plan_claim_subtask', async (args) => {
       const result = attemptClaimPlanSubtask(store, args);
@@ -658,6 +662,8 @@ export type ClaimPlanSubtaskArgs = {
   session_id: string;
   agent: string;
   repo_root?: string | undefined;
+  /** Skip the depends_on completeness check (records a force-claim note). */
+  force?: boolean | undefined;
 };
 
 export type ClaimPlanSubtaskResult =
@@ -725,16 +731,20 @@ export function attemptClaimPlanSubtask(
     .filter((s): s is SubtaskLookup => s !== null)
     .map((s) => s.info);
 
+  let forcedUnmetDeps: number[] = [];
   if (!areDepsMet(located.info, siblings)) {
     const unmet = located.info.depends_on.filter((idx) => {
       const dep = siblings.find((s) => s.subtask_index === idx);
       return dep?.status !== 'completed';
     });
-    return {
-      ok: false,
-      code: 'PLAN_SUBTASK_DEPS_UNMET',
-      message: `dependencies not met: sub-tasks [${unmet.join(', ')}] are not completed`,
-    };
+    if (!args.force) {
+      return {
+        ok: false,
+        code: 'PLAN_SUBTASK_DEPS_UNMET',
+        message: `dependencies not met: sub-tasks [${unmet.join(', ')}] are not completed`,
+      };
+    }
+    forcedUnmetDeps = unmet;
   }
 
   try {
@@ -780,6 +790,18 @@ export function attemptClaimPlanSubtask(
                 guarded.recommendation ?? 'request handoff or explicit takeover before claiming',
             };
           }
+        }
+        // Audit the dep override only once the claim is actually happening —
+        // written outside this transaction it would record force-claims that
+        // lost the race and never occurred.
+        if (forcedUnmetDeps.length > 0) {
+          store.addObservation({
+            session_id: args.session_id,
+            task_id: fresh.task_id,
+            kind: 'note',
+            content: `force-claimed sub-${args.subtask_index} of ${args.plan_slug} past unmet deps [${forcedUnmetDeps.join(', ')}]`,
+            metadata: { kind: 'plan-subtask-force-claim', unmet_deps: forcedUnmetDeps },
+          });
         }
         store.addObservation({
           session_id: args.session_id,

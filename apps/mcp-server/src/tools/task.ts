@@ -402,14 +402,16 @@ export function register(server: McpServer, ctx: ToolContext): void {
         session_id,
         file_path: normalizedFilePath,
       });
-      if (guarded.status === 'takeover_recommended') {
-        return mcpErrorResponse(
-          'CLAIM_TAKEOVER_RECOMMENDED',
-          guarded.recommendation ?? 'release or take over inactive claim before claiming',
-          { ...guarded },
-        );
-      }
-      if (guarded.status === 'blocked_active_owner') {
+      const contended =
+        guarded.status === 'takeover_recommended' || guarded.status === 'blocked_active_owner';
+      if (contended && settings.coordinationMode === 'guarded') {
+        if (guarded.status === 'takeover_recommended') {
+          return mcpErrorResponse(
+            'CLAIM_TAKEOVER_RECOMMENDED',
+            guarded.recommendation ?? 'release or take over inactive claim before claiming',
+            { ...guarded },
+          );
+        }
         return mcpErrorResponse(
           'CLAIM_HELD_BY_ACTIVE_OWNER',
           guarded.recommendation ?? 'request handoff or explicit takeover before claiming',
@@ -443,12 +445,20 @@ export function register(server: McpServer, ctx: ToolContext): void {
       const previousClaim = previous
         ? compactPreviousClaim(previous, session_id, settings.claimStaleMinutes)
         : null;
+      // Open mode lets contended claims through: the claim succeeds, but the
+      // response carries the contention loudly so the agent coordinates
+      // instead of silently clobbering a live owner.
       return jsonReply({
         observation_id: id,
         file_path: normalizedFilePath,
         claim_status: guarded.status,
         claim_task_id: guarded.claim_task_id ?? task_id,
-        warning: null,
+        contention: contended,
+        contention_detail: contended ? { ...guarded } : null,
+        warning: contended
+          ? (guarded.recommendation ??
+            'another live session holds this file; coordinate via task_message before editing')
+          : null,
         live_file_contentions: [],
         overlap: previousClaim?.overlap ?? 'none',
         previous_claim: previousClaim,

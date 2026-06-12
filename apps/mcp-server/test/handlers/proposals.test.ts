@@ -10,6 +10,10 @@ import {
   handleTaskPropose,
 } from '../../src/handlers/proposals.js';
 
+// These suites exercise the strict role/claim gates, which only apply in
+// guarded mode (open is the default since the coordinationMode change).
+const guardedSettings = { ...defaultSettings, coordinationMode: 'guarded' as const };
+
 interface SqlRunResult {
   changes: number;
   lastInsertRowid: number | bigint;
@@ -35,7 +39,7 @@ let db: SqlDatabase;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'colony-mcp-proposals-'));
-  store = new MemoryStore({ dbPath: join(dir, 'data.db'), settings: defaultSettings });
+  store = new MemoryStore({ dbPath: join(dir, 'data.db'), settings: guardedSettings });
   db = (store.storage as unknown as StorageWithDb).db;
   installProposalSchema();
 });

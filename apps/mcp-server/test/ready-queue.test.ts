@@ -458,12 +458,17 @@ beforeEach(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'colony-ready-data-'));
   repoRoot = mkdtempSync(join(tmpdir(), 'colony-ready-repo-'));
   writeFileSync(join(repoRoot, 'SPEC.md'), '# SPEC\n', 'utf8');
-  store = new MemoryStore({ dbPath: join(dataDir, 'data.db'), settings: defaultSettings });
+  // Executor proposal filtering only applies in guarded mode (open is the
+  // default since the coordinationMode change).
+  store = new MemoryStore({
+    dbPath: join(dataDir, 'data.db'),
+    settings: { ...defaultSettings, coordinationMode: 'guarded' as const },
+  });
   store.startSession({ id: 'planner', ide: 'claude-code', cwd: repoRoot });
   store.startSession({ id: 'queen', ide: 'queen', cwd: repoRoot });
   store.startSession({ id: 'agent-session', ide: 'codex', cwd: repoRoot });
   store.startSession({ id: 'other-session', ide: 'claude-code', cwd: repoRoot });
-  const server = buildServer(store, defaultSettings);
+  const server = buildServer(store, { ...defaultSettings, coordinationMode: 'guarded' as const });
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'test', version: '0.0.0' });
   await Promise.all([server.connect(serverT), client.connect(clientT)]);
