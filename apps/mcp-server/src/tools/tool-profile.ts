@@ -59,6 +59,7 @@ export function resolveToolProfile(
 export function gateToolRegistration(
   server: McpServer,
   allow: (name: string) => boolean,
+  onRegister?: (name: string, description: string) => void,
 ): McpServer {
   return new Proxy(server, {
     get(target, prop, _receiver) {
@@ -66,6 +67,9 @@ export function gateToolRegistration(
         return (...args: unknown[]) => {
           const name = args[0];
           if (typeof name === 'string' && !allow(name)) return undefined;
+          if (typeof name === 'string' && onRegister) {
+            onRegister(name, typeof args[1] === 'string' ? args[1] : '');
+          }
           return (target.tool as (...a: unknown[]) => unknown).apply(target, args);
         };
       }
@@ -75,4 +79,16 @@ export function gateToolRegistration(
       return typeof value === 'function' ? (value as CallableFunction).bind(target) : value;
     },
   }) as McpServer;
+}
+
+/**
+ * Registration-cost telemetry captured while tools register. Token figure
+ * covers name + description only — input schemas are zod shapes here and only
+ * become countable JSON schema at listTools time; the schema-inclusive budget
+ * lives in apps/mcp-server/test/tool-budget.test.ts.
+ */
+export interface ToolRegistrationStats {
+  profile: McpToolProfile;
+  tool_count: number;
+  name_description_tokens: number;
 }

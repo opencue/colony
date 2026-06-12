@@ -81,11 +81,23 @@ interface StartupWarning {
   next_args?: Record<string, unknown>;
 }
 
+interface StartupLane {
+  agent: string;
+  branch: string;
+  activity: HivemindSession['activity'];
+  task: string;
+}
+
 interface StartupPanel {
   session_id: string;
   agent: string;
+  /** Active MCP tool surface; lean callers needing plan/spec/memoir tools restart with COLONY_TOOL_PROFILE=full. */
+  tool_profile: 'lean' | 'full';
   repo_root: string | null;
   branch: string | null;
+  /** Compact lane map so startup_panel alone answers "who else is active". */
+  compact_hivemind: { lane_count: number; lanes: StartupLane[] };
+  attention_summary: { unread: number; blocking: boolean; pending_handoffs: number };
   active_task: StartupPanelTask | null;
   ready_task: StartupReadyTask | null;
   active_queen_plan: StartupQueenPlan | null;
@@ -125,6 +137,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
       const panel = await buildStartupPanel(store, {
         session_id,
         agent,
+        tool_profile: ctx.toolProfile ?? 'full',
         ...(repo_root !== undefined ? { repo_root } : {}),
         ...(branch !== undefined ? { branch } : {}),
         ready_limit: ready_limit ?? DEFAULT_READY_LIMIT,
@@ -141,6 +154,7 @@ export async function buildStartupPanel(
   args: {
     session_id: string;
     agent: string;
+    tool_profile?: 'lean' | 'full';
     repo_root?: string;
     branch?: string;
     ready_limit?: number;
@@ -194,8 +208,23 @@ export async function buildStartupPanel(
   return {
     session_id: args.session_id,
     agent: args.agent,
+    tool_profile: args.tool_profile ?? 'full',
     repo_root: scopedRepoRoot,
     branch: activeBranch,
+    compact_hivemind: {
+      lane_count: snapshot.session_count,
+      lanes: snapshot.sessions.map((lane) => ({
+        agent: lane.agent,
+        branch: lane.branch,
+        activity: lane.activity,
+        task: lane.task.slice(0, 80),
+      })),
+    },
+    attention_summary: {
+      unread: inbox.summary.unread_message_count,
+      blocking: inbox.summary.blocked,
+      pending_handoffs: inbox.summary.pending_handoff_count,
+    },
     active_task: activeTask ? compactTask(activeTask) : null,
     ready_task: compactReadyTask(ready.ready[0] ?? null),
     active_queen_plan: activeQueenPlan,

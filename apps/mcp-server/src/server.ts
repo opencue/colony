@@ -2,6 +2,7 @@
 import { readSync } from 'node:fs';
 import { join } from 'node:path';
 import { PassThrough, type Readable } from 'node:stream';
+import { countTokens } from '@colony/compress';
 import { type Settings, loadSettings, resolveDataDir } from '@colony/config';
 import { type Embedder, MemoryStore } from '@colony/core';
 import { createEmbedder } from '@colony/embedding';
@@ -39,7 +40,12 @@ import * as spec from './tools/spec.js';
 import * as startupPanel from './tools/startup-panel.js';
 import * as suggest from './tools/suggest.js';
 import * as task from './tools/task.js';
-import { LEAN_TOOLS, gateToolRegistration, resolveToolProfile } from './tools/tool-profile.js';
+import {
+  LEAN_TOOLS,
+  type ToolRegistrationStats,
+  gateToolRegistration,
+  resolveToolProfile,
+} from './tools/tool-profile.js';
 
 export { buildBridgeStatusPayload } from './tools/bridge.js';
 export type { BridgeStatus, BridgeStatusOptions } from './tools/bridge.js';
@@ -71,8 +77,20 @@ export function buildServer(
   // COLONY_TOOL_PROFILE=full (or settings.mcp.toolProfile) restores the
   // whole surface for plan/spec/queen lanes.
   const toolProfile = options.toolProfile ?? resolveToolProfile(settings);
-  const registrar =
-    toolProfile === 'lean' ? gateToolRegistration(server, (name) => LEAN_TOOLS.has(name)) : server;
+  const registrationStats: ToolRegistrationStats = {
+    profile: toolProfile,
+    tool_count: 0,
+    name_description_tokens: 0,
+  };
+  const recordRegistration = (name: string, description: string): void => {
+    registrationStats.tool_count += 1;
+    registrationStats.name_description_tokens += countTokens(`${name} ${description}`);
+  };
+  const registrar = gateToolRegistration(
+    server,
+    toolProfile === 'lean' ? (name) => LEAN_TOOLS.has(name) : () => true,
+    recordRegistration,
+  );
 
   // Make this MCP client visible to hivemind even when the IDE never ran
   // colony's lifecycle hooks (codex, custom MCP clients, background tools).
@@ -102,6 +120,7 @@ export function buildServer(
     store,
     settings,
     toolProfile,
+    registrationStats,
     ...(options.planValidation !== undefined ? { planValidation: options.planValidation } : {}),
     resolveEmbedder,
     // Heartbeat outer touches the active-session row before the handler runs;

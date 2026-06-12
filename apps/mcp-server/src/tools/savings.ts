@@ -130,6 +130,14 @@ export function register(server: McpServer, ctx: ToolContext): void {
           session_summary: live.session_summary,
           sessions: live.sessions,
         };
+        const registration_cost = ctx.registrationStats
+          ? {
+              profile: ctx.registrationStats.profile,
+              tool_count: ctx.registrationStats.tool_count,
+              name_description_tokens: ctx.registrationStats.name_description_tokens,
+              note: 'Per-session schema-injection cost basis: name+description tokens only. Schema-inclusive budgets are enforced by apps/mcp-server/test/tool-budget.test.ts (lean <=4200, full <=15000).',
+            }
+          : null;
         if (honest === true) {
           return {
             content: [
@@ -137,6 +145,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
                 type: 'text',
                 text: JSON.stringify({
                   mode: 'honest_live_receipts',
+                  registration_cost,
                   live: livePayload,
                 }),
               },
@@ -148,6 +157,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
             {
               type: 'text',
               text: JSON.stringify({
+                registration_cost,
                 live: livePayload,
                 comparison,
                 comparison_cost: live.cost_basis.configured

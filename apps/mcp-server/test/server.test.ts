@@ -280,6 +280,16 @@ describe('MCP server', () => {
       } | null;
     };
 
+    const withRegistration = JSON.parse(text) as {
+      registration_cost: {
+        profile: string;
+        tool_count: number;
+        name_description_tokens: number;
+      } | null;
+    };
+    expect(withRegistration.registration_cost).toMatchObject({ profile: 'full' });
+    expect(withRegistration.registration_cost?.tool_count).toBeGreaterThan(70);
+    expect(withRegistration.registration_cost?.name_description_tokens).toBeGreaterThan(1000);
     expect(payload.live.cost_basis.configured).toBe(true);
     expect(payload.live.totals.total_cost_usd).toBeCloseTo(0.005, 12);
     expect(payload.live.totals.avg_cost_usd).toBeCloseTo(0.005, 12);
