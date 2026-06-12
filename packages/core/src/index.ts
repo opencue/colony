@@ -227,6 +227,7 @@ export {
   type CoalescedMessageGroup,
   type InboxHandoff,
   type InboxFileHeat,
+  type InboxWorkingNote,
   type InboxLane,
   type InboxMessage,
   type InboxOmxRuntimeWarning,

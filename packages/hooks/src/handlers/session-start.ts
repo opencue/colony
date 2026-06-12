@@ -12,6 +12,7 @@ import {
   type AttentionItem,
   type Embedder,
   type InboxMessage,
+  type InboxWorkingNote,
   type MemoryStore,
   ProposalSystem,
   TaskThread,
@@ -500,14 +501,17 @@ export function buildTaskPreface(
   const pending = thread.pendingHandoffsFor(input.session_id, agent);
   const pendingWakes = thread.pendingWakesFor(input.session_id, agent);
   let unreadMessages: InboxMessage[] = [];
+  let workingNotes: InboxWorkingNote[] = [];
   try {
-    unreadMessages = buildAttentionInbox(store, {
+    const inbox = buildAttentionInbox(store, {
       session_id: input.session_id,
       agent,
       task_ids: [thread.task_id],
       repo_root: detected.repo_root,
       include_stalled_lanes: false,
-    }).unread_messages;
+    });
+    unreadMessages = inbox.unread_messages;
+    workingNotes = inbox.active_working_notes;
   } catch (err) {
     console.error(`[colony] buildTaskPreface unreadMessages: ${(err as Error)?.message ?? err}`);
     unreadMessages = [];
@@ -549,6 +553,14 @@ export function buildTaskPreface(
       `## Task thread #${thread.task_id} (${detected.branch})`,
       `Joined with: ${who}. Post coordination via MCP tools task_post / task_claim_file / task_hand_off.`,
     );
+    // "What is everyone doing" at a glance: each co-participant's latest
+    // working note (already filtered to other live sessions, 30m window).
+    for (const note of workingNotes.slice(0, 3)) {
+      const minutes = Math.max(0, Math.round((Date.now() - note.ts) / 60_000));
+      lines.push(
+        `  now: ${note.agent}@${note.session_id.slice(0, 8)} (${minutes}m ago) ${note.preview.slice(0, 80)}`,
+      );
+    }
   }
   if (options.includeAttentionItems === false) {
     return lines.join('\n');

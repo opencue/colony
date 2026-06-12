@@ -1214,3 +1214,75 @@ describe('buildAttentionInbox', () => {
     });
   });
 });
+
+describe('active working notes', () => {
+  it('surfaces the latest working note per other session within the window', () => {
+    seed('me', 'peer-a', 'peer-b');
+    const thread = TaskThread.open(store, {
+      repo_root: '/r',
+      branch: 'feat/notes',
+      session_id: 'me',
+    });
+    thread.join('me', 'claude');
+    thread.join('peer-a', 'codex');
+    thread.join('peer-b', 'gemini');
+
+    const post = (session_id: string, content: string) =>
+      thread.post({ session_id, kind: 'note', content, metadata: { working_note: true } });
+    post('peer-a', 'older note from peer-a about apps/cli/src/index.ts');
+    post('peer-a', 'latest note from peer-a about packages/core/src/plan.ts');
+    post('peer-b', 'peer-b is wiring the viewer build');
+    // Plain note without working_note metadata must not surface.
+    thread.post({ session_id: 'peer-b', kind: 'note', content: 'not a working note' });
+    // My own working note must not surface to me.
+    post('me', 'my own note');
+
+    const inbox = buildAttentionInbox(store, {
+      session_id: 'me',
+      agent: 'claude',
+      task_ids: [thread.task_id],
+      include_stalled_lanes: false,
+    });
+
+    expect(inbox.summary.active_working_note_count).toBe(2);
+    const bySession = new Map(inbox.active_working_notes.map((n) => [n.session_id, n]));
+    expect(bySession.get('peer-a')?.preview).toContain('packages/core/src/plan.ts');
+    expect(bySession.get('peer-a')?.agent).toBe('codex');
+    expect(bySession.get('peer-b')?.agent).toBe('gemini');
+    for (const note of inbox.active_working_notes) {
+      expect(note.observation_id).toBeGreaterThan(0);
+    }
+  });
+
+  it('drops working notes older than the 30-minute window', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-12T10:00:00Z'));
+      seed('me2', 'peer-old');
+      const thread = TaskThread.open(store, {
+        repo_root: '/r',
+        branch: 'feat/old-notes',
+        session_id: 'me2',
+      });
+      thread.join('me2', 'claude');
+      thread.join('peer-old', 'codex');
+      thread.post({
+        session_id: 'peer-old',
+        kind: 'note',
+        content: 'stale note',
+        metadata: { working_note: true },
+      });
+
+      vi.setSystemTime(new Date('2026-06-12T10:45:00Z'));
+      const inbox = buildAttentionInbox(store, {
+        session_id: 'me2',
+        agent: 'claude',
+        task_ids: [thread.task_id],
+        include_stalled_lanes: false,
+      });
+      expect(inbox.summary.active_working_note_count).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

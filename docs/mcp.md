@@ -594,6 +594,8 @@ progressive-disclosure IDs should still call `hivemind_context`,
 Return live lane ownership plus compact relevant memory hits and negative warnings in one request.
 Before editing, inspect ownership, then claim touched files on the active task.
 
+Lane liveness is unified across both liveness systems: each session carries `liveness_source` (`heartbeat` | `sqlite` | `worktree-lock` | `file-lock` | `managed-worktree`). A lane whose heartbeat file went stale but whose session wrote a SQLite observation within the heartbeat window is reclassified as `working` with `liveness_source: "sqlite"` — a dead heartbeat writer no longer hides a live agent.
+
 ```json
 {
   "name": "hivemind_context",
@@ -1520,6 +1522,8 @@ Errors include `{ "code": "SESSION_NOT_FOUND", "error": "..." }` when either `ta
 ## `attention_inbox`
 
 Compact post-`hivemind_context` attention check for live pending handoffs, unread messages, blockers, stalled lanes, pending wakes, recent other-session file claims, stale claim cleanup signals, and decaying hot files. Expired handoffs are hidden from the pending bucket; the original observations remain available via timeline/search for audit. This is the main surface where `task_message` items show up: expired unread messages are hidden, read/replied messages stop triggering attention, and blocking messages remain prominent until read, replied, retracted, or expired. Use `task_messages` for a focused message-only inbox. Review compact IDs first, then fetch full bodies via `get_observations` only for the entries you need.
+
+The payload includes `active_working_notes`: the latest `task_note_working` note from each other live session on your in-scope tasks (30-minute window, 120-char preview, one entry per session, hydrate via `get_observations`). `summary.active_working_note_count` carries the count — this is the "what is everyone doing right now" surface.
 
 ```json
 {

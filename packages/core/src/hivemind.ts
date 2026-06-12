@@ -13,12 +13,31 @@ const DEFAULT_LIMIT = 50;
 
 export type HivemindActivity = 'working' | 'thinking' | 'idle' | 'stalled' | 'dead' | 'unknown';
 
+export type HivemindLivenessSource =
+  | 'heartbeat'
+  | 'sqlite'
+  | 'worktree-lock'
+  | 'file-lock'
+  | 'managed-worktree';
+
+/** Minimal SQLite read surface for liveness reconciliation (MemoryStore.storage satisfies it). */
+export interface HivemindSqliteLiveness {
+  lastObservationTsForSession(session_id: string): number;
+}
+
 export interface HivemindOptions {
   repoRoot?: string;
   repoRoots?: string[];
   includeStale?: boolean;
   limit?: number;
   now?: number;
+  /**
+   * Optional SQLite-side liveness. Heartbeat files and the observations DB
+   * are two disconnected liveness systems; when provided, a session whose
+   * heartbeat went stale but that wrote an observation within the heartbeat
+   * window is reclassified as working (liveness_source: 'sqlite').
+   */
+  sqliteLiveness?: HivemindSqliteLiveness;
 }
 
 export interface HivemindSession {
@@ -33,6 +52,7 @@ export interface HivemindSession {
   state: string;
   activity: HivemindActivity;
   activity_summary: string;
+  liveness_source: HivemindLivenessSource;
   worktree_path: string;
   pid: number | null;
   pid_alive: boolean | null;
@@ -81,7 +101,12 @@ export function readHivemind(options: HivemindOptions = {}): HivemindSnapshot {
   const now = options.now ?? Date.now();
   const repoRoots = resolveRepoRoots(options);
   const limit = normalizeLimit(options.limit);
-  const sessions = repoRoots.flatMap((repoRoot) => readRepoSessions(repoRoot, now));
+  const rawSessions = repoRoots.flatMap((repoRoot) => readRepoSessions(repoRoot, now));
+  // Reconcile BEFORE the dead-filter so SQLite-fresh sessions are resurrected.
+  const liveness = options.sqliteLiveness;
+  const sessions = liveness
+    ? rawSessions.map((session) => applySqliteLiveness(session, liveness, now))
+    : rawSessions;
   const visibleSessions = options.includeStale
     ? sessions
     : sessions.filter((session) => session.activity !== 'dead');
@@ -94,6 +119,35 @@ export function readHivemind(options: HivemindOptions = {}): HivemindSnapshot {
     session_count: sortedSessions.length,
     counts: countActivities(sortedSessions),
     sessions: limitedSessions,
+  };
+}
+
+/**
+ * Merge SQLite observation freshness into a heartbeat-derived session. The
+ * authoritative freshness is max(heartbeat, last observation): an agent whose
+ * heartbeat writer died but that is still writing observations is alive.
+ */
+function applySqliteLiveness(
+  session: HivemindSession,
+  liveness: HivemindSqliteLiveness,
+  now: number,
+): HivemindSession {
+  if (!session.session_key) return session;
+  if (session.activity === 'working' || session.activity === 'thinking') return session;
+  let ts = 0;
+  try {
+    ts = liveness.lastObservationTsForSession(session.session_key);
+  } catch {
+    return session; // best-effort: a broken store must not break the snapshot
+  }
+  if (!ts || now - ts > HEARTBEAT_STALE_MS) return session;
+  const minutes = Math.max(0, Math.round((now - ts) / 60_000));
+  return {
+    ...session,
+    activity: 'working',
+    liveness_source: 'sqlite',
+    activity_summary:
+      `${session.activity_summary} Reclassified: SQLite observations ${minutes}m ago.`.trim(),
   };
 }
 
@@ -205,6 +259,7 @@ function normalizeActiveSession(
   return {
     repo_root: repoRoot,
     source: 'active-session',
+    liveness_source: 'heartbeat',
     branch,
     task: latestTaskPreview || taskName,
     task_name: taskName,
@@ -288,6 +343,7 @@ function normalizeWorktreeLock(
       return {
         repo_root: resolve(repoRoot),
         source: 'worktree-lock' as const,
+        liveness_source: 'worktree-lock' as const,
         branch,
         task: taskName,
         task_name: taskName,
@@ -416,6 +472,7 @@ function buildFileLockSession(
   return {
     repo_root: resolve(repoRoot),
     source: 'file-lock',
+    liveness_source: 'file-lock',
     branch: group.branch,
     task: taskPreview ? `GX locks: ${taskPreview}` : `GX locks on ${group.branch}`,
     task_name: `GX file locks (${group.claims.length})`,
@@ -462,6 +519,7 @@ function readManagedWorktreeSessions(repoRoot: string, now: number): HivemindSes
       sessions.push({
         repo_root: resolve(repoRoot),
         source: 'managed-worktree',
+        liveness_source: 'managed-worktree',
         branch,
         task: `Stranded lane: ${taskName}`,
         task_name: taskName,
