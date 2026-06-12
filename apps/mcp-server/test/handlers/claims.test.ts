@@ -10,12 +10,16 @@ import {
   filterReadyForExecutor,
 } from '../../src/handlers/claims.js';
 
+// These suites exercise the strict role/claim gates, which only apply in
+// guarded mode (open is the default since the coordinationMode change).
+const guardedSettings = { ...defaultSettings, coordinationMode: 'guarded' as const };
+
 let dataDir: string;
 let store: MemoryStore;
 
 beforeEach(() => {
   dataDir = mkdtempSync(join(tmpdir(), 'colony-claims-handler-'));
-  store = new MemoryStore({ dbPath: join(dataDir, 'data.db'), settings: defaultSettings });
+  store = new MemoryStore({ dbPath: join(dataDir, 'data.db'), settings: guardedSettings });
 });
 
 afterEach(() => {

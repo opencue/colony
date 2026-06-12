@@ -1113,7 +1113,12 @@ Claim a file before editing so other agents see ownership and overlap warnings. 
 
 Claims are warnings, not locks. They never block writes. They arm the conflict preface for the next turn.
 
-Scouts cannot claim files. `task_claim_file` returns `SCOUT_NO_CLAIM` for agents whose profile role is `scout`; use `task_propose` with observation evidence instead.
+Coordination gates follow `settings.coordinationMode` (default `open`):
+
+- **open (default)** — contended claims succeed. When another live session holds the file, the response carries `contention: true`, `claim_status` (`blocked_active_owner` | `takeover_recommended`), a `warning`, and `contention_detail`; the claim observation is recorded but table ownership stays with the live owner — coordinate via `task_message` before editing. Roles are advisory: scouts can claim.
+- **guarded** — the historical strict behavior: contended claims fail with `CLAIM_HELD_BY_ACTIVE_OWNER` / `CLAIM_TAKEOVER_RECOMMENDED`, and `task_claim_file` returns `SCOUT_NO_CLAIM` for agents whose profile role is `scout` (use `task_propose` with observation evidence instead).
+
+Protected-branch rejection (`PROTECTED_BRANCH_CLAIM_REJECTED`) applies in both modes via `rejectProtectedBranchClaims`.
 
 Existing claims are age-classified before they are treated as ownership. Fresh claims can produce active overlap warnings; stale or expired/weak claims remain in audit history and may be returned as `weak_stale` details, but they are not active ownership and are not inherited by `task_relay`.
 
@@ -1620,7 +1625,7 @@ unavailable or no similar tasks clear the floor. Use returned IDs with
 
 ## `task_propose`
 
-Create an observation-backed scout proposal as a task thread scoped to `(repo_root, branch)`. Scouts must provide at least one `observation_evidence_ids` entry. The new task row starts with `proposal_status="proposed"` and is hidden from executor ready-work until a queen approves it with `task_approve_proposal`.
+Create an observation-backed proposal as a task thread scoped to `(repo_root, branch)`. At least one `observation_evidence_ids` entry is required in every mode. Under `coordinationMode: open` (default) any agent can propose, with no open-proposal cap, and proposals are visible to everyone in ready-work. Under `guarded`, executors cannot propose, scouts are capped at 3 open proposals, and the new task row stays hidden from executor ready-work until a queen approves it with `task_approve_proposal` (queen/operator approval is required in both modes).
 
 ```json
 {

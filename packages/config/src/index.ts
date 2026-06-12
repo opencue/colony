@@ -4,6 +4,7 @@ export {
   type Settings,
   type BridgePolicyMode,
   type CompressionIntensity,
+  type CoordinationMode,
   type EmbeddingProvider,
   type McpToolProfile,
 } from './schema.js';

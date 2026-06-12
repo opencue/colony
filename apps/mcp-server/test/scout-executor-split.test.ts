@@ -8,14 +8,18 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildServer } from '../src/server.js';
 
+// These suites exercise the strict role/claim gates, which only apply in
+// guarded mode (open is the default since the coordinationMode change).
+const guardedSettings = { ...defaultSettings, coordinationMode: 'guarded' as const };
+
 let dir: string;
 let store: MemoryStore;
 let client: Client;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'colony-scout-executor-split-'));
-  store = new MemoryStore({ dbPath: join(dir, 'data.db'), settings: defaultSettings });
-  const server = buildServer(store, defaultSettings);
+  store = new MemoryStore({ dbPath: join(dir, 'data.db'), settings: guardedSettings });
+  const server = buildServer(store, guardedSettings);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'scout-executor-split-test', version: '0.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);

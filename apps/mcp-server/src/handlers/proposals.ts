@@ -89,7 +89,10 @@ export function handleTaskPropose(
       const db = rawDb(store);
       assertProposalSchema(db);
       const actor = loadActorProfile(store, ctx.agent);
-      if (actor.role === 'executor') {
+      // Role gate and cap apply only in guarded mode; the evidence requirement
+      // below is data quality, not role policy, and holds in both modes.
+      const guarded = store.settings.coordinationMode === 'guarded';
+      if (guarded && actor.role === 'executor') {
         throw new TaskThreadError(
           TASK_THREAD_ERROR_CODES.EXECUTOR_CANNOT_PROPOSE,
           'executors cannot propose; scouts must provide evidence first',
@@ -101,7 +104,7 @@ export function handleTaskPropose(
           'observationEvidenceIds must contain at least one evidence id',
         );
       }
-      if (actor.openProposalCount >= MAX_OPEN_PROPOSALS_PER_SCOUT) {
+      if (guarded && actor.openProposalCount >= MAX_OPEN_PROPOSALS_PER_SCOUT) {
         throw new TaskThreadError(
           TASK_THREAD_ERROR_CODES.PROPOSAL_CAP_EXCEEDED,
           `scout ${ctx.agent} already has ${MAX_OPEN_PROPOSALS_PER_SCOUT} open proposals`,

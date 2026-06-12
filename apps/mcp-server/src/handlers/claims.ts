@@ -31,6 +31,8 @@ export function actorRole(store: MemoryStore, ctx: ClaimActorContext): AgentRole
 }
 
 export function enforceScoutNoClaim(store: MemoryStore, ctx: ClaimActorContext): void {
+  // Open mode (default): roles are advisory hints, not capability walls.
+  if (store.settings.coordinationMode === 'open') return;
   if (actorRole(store, ctx) !== 'scout') return;
   throw new ClaimsHandlerError(SCOUT_NO_CLAIM, 'scouts cannot claim files; propose instead');
 }
@@ -38,7 +40,10 @@ export function enforceScoutNoClaim(store: MemoryStore, ctx: ClaimActorContext):
 export function filterReadyForExecutor<T extends ProposalReadyRow>(
   rows: readonly T[],
   role: AgentRole,
+  mode: 'open' | 'guarded' = 'guarded',
 ): T[] {
+  // Open mode: every agent sees every proposal, approved or not.
+  if (mode === 'open') return [...rows];
   if (role === 'scout') return [];
   if (role === 'executor') {
     return rows.filter((row) => row.proposal_status == null || row.proposal_status === 'approved');

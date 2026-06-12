@@ -61,7 +61,13 @@ beforeEach(async () => {
   // Disable the protected-branch guard so the existing fixtures (most
   // of which use branch:'main' for brevity) keep exercising the
   // contention-resolution code paths they were written for.
-  const settings = { ...defaultSettings, rejectProtectedBranchClaims: false };
+  const settings = {
+    ...defaultSettings,
+    rejectProtectedBranchClaims: false,
+    // Contention-resolution paths only hard-fail in guarded mode (open is the
+    // default since the coordinationMode change).
+    coordinationMode: 'guarded' as const,
+  };
   store = new MemoryStore({ dbPath: join(dir, 'data.db'), settings });
   const server = buildServer(store, settings);
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
@@ -356,6 +362,68 @@ describe('task threads — file claims', () => {
       owner_active: true,
     });
     expect(store.storage.getClaim(second.task_id, 'src/protected.ts')).toBeUndefined();
+  });
+
+  it('open mode lets a contended claim through with loud contention info', async () => {
+    const openDir = mkdtempSync(join(dir, 'open-mode-'));
+    const openSettings = {
+      ...defaultSettings,
+      rejectProtectedBranchClaims: false,
+      coordinationMode: 'open' as const,
+    };
+    const openStore = new MemoryStore({ dbPath: join(openDir, 'data.db'), settings: openSettings });
+    const server = buildServer(openStore, openSettings);
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const openClient = new Client({ name: 'test', version: '0.0.0' });
+    await Promise.all([server.connect(serverT), openClient.connect(clientT)]);
+    try {
+      const repoRoot = mkdtempSync(join(openDir, 'repo-'));
+      openStore.startSession({ id: 'active-owner', ide: 'claude-code', cwd: repoRoot });
+      openStore.startSession({ id: 'requester', ide: 'codex', cwd: repoRoot });
+      const first = TaskThread.open(openStore, {
+        repo_root: repoRoot,
+        branch: 'main',
+        session_id: 'active-owner',
+      });
+      first.join('active-owner', 'claude');
+      first.claimFile({ session_id: 'active-owner', file_path: 'src/protected.ts' });
+      const second = TaskThread.open(openStore, {
+        repo_root: repoRoot,
+        branch: 'main',
+        session_id: 'requester',
+      });
+      second.join('requester', 'codex');
+
+      const res = await openClient.callTool({
+        name: 'task_claim_file',
+        arguments: {
+          task_id: second.task_id,
+          session_id: 'requester',
+          file_path: 'src/protected.ts',
+        },
+      });
+      const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+      expect(res.isError).toBeFalsy();
+      const payload = JSON.parse(text) as {
+        contention: boolean;
+        claim_status: string;
+        warning: string | null;
+        contention_detail: { owner_session_id?: string } | null;
+      };
+      expect(payload.contention).toBe(true);
+      expect(payload.claim_status).toBe('blocked_active_owner');
+      expect(payload.warning).toBeTruthy();
+      expect(payload.contention_detail?.owner_session_id).toBe('active-owner');
+      // The contended call records a claim observation for the requester but
+      // does NOT steal table ownership — the live owner keeps the claim row.
+      expect(openStore.storage.getClaim(second.task_id, 'src/protected.ts')).toMatchObject({
+        session_id: 'active-owner',
+      });
+    } finally {
+      await openClient.close();
+      openStore.close();
+      rmSync(openDir, { recursive: true, force: true });
+    }
   });
 
   it('treats protected files as stricter than ordinary same-agent claims', async () => {

@@ -533,86 +533,148 @@ describe('MCP server', () => {
   });
 
   it('wires scout proposal tools and role-aware claim blocking', async () => {
-    const scoutProfileRes = await client.callTool({
-      name: 'agent_upsert_profile',
-      arguments: { agent: 'scout-A', role: 'scout', capabilities: { api_work: 0.9 } },
+    // Role gates only block in guarded mode (open is the default since the
+    // coordinationMode change), so this flow runs on an isolated guarded server.
+    const guardedDir = mkdtempSync(join(tmpdir(), 'colony-mcp-guarded-'));
+    const guardedSettings = { ...defaultSettings, coordinationMode: 'guarded' as const };
+    const store = new MemoryStore({
+      dbPath: join(guardedDir, 'data.db'),
+      settings: guardedSettings,
     });
-    const scoutProfileText =
-      (scoutProfileRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
-    expect(JSON.parse(scoutProfileText)).toMatchObject({
-      agent: 'scout-A',
-      role: 'scout',
-    });
+    const server = buildServer(store, guardedSettings);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const scoutProfileRes = await client.callTool({
+        name: 'agent_upsert_profile',
+        arguments: { agent: 'scout-A', role: 'scout', capabilities: { api_work: 0.9 } },
+      });
+      const scoutProfileText =
+        (scoutProfileRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+      expect(JSON.parse(scoutProfileText)).toMatchObject({
+        agent: 'scout-A',
+        role: 'scout',
+      });
+      store.storage.upsertAgentProfile({
+        agent: 'queen-A',
+        capabilities: '{}',
+        role: 'queen',
+        updated_at: 1,
+      });
+
+      const proposeRes = await client.callTool({
+        name: 'task_propose',
+        arguments: {
+          repo_root: '/repo',
+          branch: 'proposal/mcp-wire',
+          summary: 'Wire proposal MCP tools',
+          rationale: 'Evidence-backed task proposal.',
+          touches_files: ['apps/mcp-server/src/server.ts'],
+          observation_evidence_ids: [101],
+          session_id: 'scout-session',
+          agent: 'scout-A',
+        },
+      });
+      const proposeText =
+        (proposeRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+      const proposed = JSON.parse(proposeText) as {
+        task_id: number;
+        proposal_status: string;
+        open_proposal_count: number;
+      };
+      expect(proposed).toMatchObject({
+        proposal_status: 'proposed',
+        open_proposal_count: 1,
+      });
+      expect(store.storage.getTask(proposed.task_id)).toMatchObject({
+        created_by: 'scout-A',
+        proposal_status: 'proposed',
+        observation_evidence_ids: '[101]',
+      });
+
+      const claimRes = await client.callTool({
+        name: 'task_claim_file',
+        arguments: {
+          task_id: proposed.task_id,
+          session_id: 'scout-session',
+          agent: 'scout-A',
+          file_path: 'apps/mcp-server/src/server.ts',
+        },
+      });
+      const claimText =
+        (claimRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+      expect(claimRes.isError).toBe(true);
+      expect(JSON.parse(claimText)).toMatchObject({ code: 'SCOUT_NO_CLAIM' });
+
+      const approveRes = await client.callTool({
+        name: 'task_approve_proposal',
+        arguments: {
+          task_id: proposed.task_id,
+          session_id: 'queen-session',
+          agent: 'queen-A',
+        },
+      });
+      const approveText =
+        (approveRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
+      expect(JSON.parse(approveText)).toEqual({
+        task_id: proposed.task_id,
+        approved: true,
+        approved_by: 'queen-A',
+      });
+      expect(store.storage.getTask(proposed.task_id)).toMatchObject({
+        proposal_status: 'approved',
+        approved_by: 'queen-A',
+      });
+      expect(store.storage.getAgentProfile('scout-A')?.open_proposal_count).toBe(0);
+    } finally {
+      await client.close();
+      store.close();
+      rmSync(guardedDir, { recursive: true, force: true });
+    }
+  });
+
+  it('open mode lets scouts claim and executors propose', async () => {
+    // defaultSettings.coordinationMode is 'open' — use the shared fixture.
     store.storage.upsertAgentProfile({
-      agent: 'queen-A',
+      agent: 'scout-open',
       capabilities: '{}',
-      role: 'queen',
+      role: 'scout',
       updated_at: 1,
     });
-
     const proposeRes = await client.callTool({
       name: 'task_propose',
       arguments: {
         repo_root: '/repo',
-        branch: 'proposal/mcp-wire',
-        summary: 'Wire proposal MCP tools',
-        rationale: 'Evidence-backed task proposal.',
-        touches_files: ['apps/mcp-server/src/server.ts'],
-        observation_evidence_ids: [101],
-        session_id: 'scout-session',
-        agent: 'scout-A',
+        branch: 'proposal/open-mode',
+        summary: 'Executor proposal in open mode',
+        rationale: 'Open mode lets the default executor role propose directly.',
+        observation_evidence_ids: [7],
+        session_id: 'exec-session',
+        agent: 'exec-open',
       },
     });
     const proposeText =
       (proposeRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
-    const proposed = JSON.parse(proposeText) as {
-      task_id: number;
-      proposal_status: string;
-      open_proposal_count: number;
-    };
-    expect(proposed).toMatchObject({
-      proposal_status: 'proposed',
-      open_proposal_count: 1,
-    });
-    expect(store.storage.getTask(proposed.task_id)).toMatchObject({
-      created_by: 'scout-A',
-      proposal_status: 'proposed',
-      observation_evidence_ids: '[101]',
-    });
+    expect(proposeRes.isError).toBeFalsy();
+    const proposed = JSON.parse(proposeText) as { task_id: number; proposal_status: string };
+    expect(proposed.proposal_status).toBe('proposed');
 
     const claimRes = await client.callTool({
       name: 'task_claim_file',
       arguments: {
         task_id: proposed.task_id,
-        session_id: 'scout-session',
-        agent: 'scout-A',
+        session_id: 'scout-open-session',
+        agent: 'scout-open',
         file_path: 'apps/mcp-server/src/server.ts',
       },
     });
     const claimText = (claimRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
-    expect(claimRes.isError).toBe(true);
-    expect(JSON.parse(claimText)).toMatchObject({ code: 'SCOUT_NO_CLAIM' });
-
-    const approveRes = await client.callTool({
-      name: 'task_approve_proposal',
-      arguments: {
-        task_id: proposed.task_id,
-        session_id: 'queen-session',
-        agent: 'queen-A',
-      },
+    expect(claimRes.isError).toBeFalsy();
+    expect(JSON.parse(claimText)).toMatchObject({
+      file_path: 'apps/mcp-server/src/server.ts',
+      contention: false,
     });
-    const approveText =
-      (approveRes.content as Array<{ type: string; text: string }>)[0]?.text ?? '{}';
-    expect(JSON.parse(approveText)).toEqual({
-      task_id: proposed.task_id,
-      approved: true,
-      approved_by: 'queen-A',
-    });
-    expect(store.storage.getTask(proposed.task_id)).toMatchObject({
-      proposal_status: 'approved',
-      approved_by: 'queen-A',
-    });
-    expect(store.storage.getAgentProfile('scout-A')?.open_proposal_count).toBe(0);
   });
 
   it('spec_change_open reports a structured error when SPEC.md is missing', async () => {
