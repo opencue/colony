@@ -1,5 +1,51 @@
 # @colony/worker
 
+## 0.8.0
+
+### Patch Changes
+
+- cdf22de: Batch worker observation embedding calls and add batch-capable embedder providers.
+- 60c3123: Changed the embedding backfill loop to send one batch of texts to embedders that support `embedBatch`, default worker batches to 32 observations, and persist each batch in a single SQLite transaction. The codex-gpu provider now calls `/embed/batch`, while storage copies returned embedding buffers so vector reads do not alias SQLite row memory.
+- Updated dependencies [8f33724]
+- Updated dependencies [819660d]
+- Updated dependencies [cdf22de]
+- Updated dependencies [4a68470]
+- Updated dependencies [782ddb6]
+- Updated dependencies [b6e2ad4]
+- Updated dependencies [86a3d1a]
+- Updated dependencies [edc318f]
+- Updated dependencies [9e1a791]
+- Updated dependencies [8917c73]
+- Updated dependencies [829556b]
+- Updated dependencies [dafe17b]
+- Updated dependencies [a83eeea]
+- Updated dependencies [e52cd83]
+- Updated dependencies [53836ff]
+- Updated dependencies [7dcece2]
+- Updated dependencies [0950b42]
+- Updated dependencies [0950b42]
+- Updated dependencies [7aba1eb]
+- Updated dependencies [950a95d]
+- Updated dependencies [3b86d74]
+- Updated dependencies [1d78c99]
+- Updated dependencies [7770b58]
+- Updated dependencies [e6c5766]
+- Updated dependencies [60c3123]
+- Updated dependencies [71ee50d]
+- Updated dependencies [2e8fba1]
+- Updated dependencies [3898ff3]
+- Updated dependencies [ccd51b6]
+- Updated dependencies [66fa52c]
+- Updated dependencies [a87921e]
+- Updated dependencies [8a15958]
+- Updated dependencies [f7b490a]
+- Updated dependencies [9a36e5e]
+  - @colony/storage@0.8.0
+  - @colony/core@0.8.0
+  - @colony/embedding@0.8.0
+  - @colony/config@0.8.0
+  - @colony/hooks@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
