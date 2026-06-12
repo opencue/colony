@@ -32,13 +32,7 @@
     "colony": "bin/colony.mjs"
   },
   "main": "./dist/index.js",
-  "files": [
-    "bin/colony.mjs",
-    "dist",
-    "hooks-scripts",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["bin/colony.mjs", "dist", "hooks-scripts", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
