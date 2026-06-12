@@ -90,8 +90,15 @@ export const SettingsSchema = z
           .describe(
             'How much of the quota-safe operating contract the SessionStart hook injects. compact = one-line pointer to AGENTS.md plus pre-work tool names (default; ~350 tokens cheaper). full = legacy verbose block. none = suppress entirely.',
           ),
+        prefaceTokenBudget: z
+          .number()
+          .int()
+          .default(800)
+          .describe(
+            'Global token budget for the assembled SessionStart preface. When the joined sections exceed it, low-priority sections (scope check, foraging, suggestions, prior sessions, …) drop first and a one-line trailer names what was trimmed. Set to 0 to disable trimming.',
+          ),
       })
-      .default({ contractMode: 'compact' })
+      .default({ contractMode: 'compact', prefaceTokenBudget: 800 })
       .describe('SessionStart preface budget controls.'),
     protected_files: z
       .array(z.string().min(1))

@@ -496,7 +496,7 @@ Fetch full observation bodies by ID.
 
 Returns: `[ { id, session_id, kind, ts, content, metadata } ]`.
 
-Content is expanded to human-readable form by default. Pass `expand: false` to request the compressed form (useful for audit or for agents that understand the caveman dialect directly).
+When `expand` is omitted, the result honors `settings.compression.expandForModel` (default `false`): model-facing reads stay in the compressed stored form, which is the cheaper default — technical tokens (paths, commands, code) are preserved byte-for-byte either way. Pass `expand: true` for human-readable prose, or `expand: false` to force the compressed form regardless of settings.
 
 ## `list_sessions`
 

@@ -129,7 +129,10 @@ export function register(server: McpServer, ctx: ToolContext): void {
       expand: z.boolean().optional(),
     },
     wrapHandler('get_observations', async ({ ids, expand: expandOpt }) => {
-      const rows = store.getObservations(ids, { expand: expandOpt ?? true });
+      // No `?? true` here: when the caller omits `expand`, MemoryStore falls
+      // back to settings.compression.expandForModel (default false), so
+      // model-facing reads stay compressed unless explicitly expanded.
+      const rows = store.getObservations(ids, expandOpt === undefined ? {} : { expand: expandOpt });
       // ICM slice 3: include importance + weight on each row so downstream
       // agents can reason about decay. Additive — older consumers ignore
       // the extra fields.
