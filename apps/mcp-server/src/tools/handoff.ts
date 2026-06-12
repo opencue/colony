@@ -5,9 +5,8 @@ import { type ToolContext, defaultWrapHandler } from './context.js';
 import { mcpError, mcpErrorResponse } from './shared.js';
 
 const RELAY_FALLBACK_RULE = [
-  'Fallback when task_relay is unavailable in your client tool surface: use task_post first to record reason, one_line, base_branch, fetch_files_at if known, touched files, and any missing source branch/worktree.',
-  'Then call task_hand_off with a compact summary and concrete next_steps so another agent can resume from base_branch instead of assuming the named source lane exists.',
-  'Use released_files when you cannot transfer ownership; use transferred_files only when the receiver should inherit those claims on accept.',
+  'Fallback when task_relay is unavailable: task_post the reason, base_branch, and touched files, then hand off with next_steps resumable from base_branch.',
+  'released_files = no ownership transfer; transferred_files = receiver inherits claims.',
 ].join(' ');
 
 export function register(server: McpServer, ctx: ToolContext): void {
@@ -17,7 +16,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
   server.tool(
     'task_hand_off',
     [
-      'Give work to another agent, transfer ownership, or pass files. Pending handoffs expire by default after 120 minutes; set expires_in_minutes when the recruitment signal should decay faster. Use for handoff routing, released_files, transferred_files, blockers, next_steps, and broadcast ownership transfer.',
+      'Give work to another agent, transfer ownership, or pass files (handoff routing, blockers, next_steps, broadcast ownership transfer). Pending handoffs expire after 120 minutes by default; set expires_in_minutes to decay faster.',
       RELAY_FALLBACK_RULE,
     ].join(' '),
     {
