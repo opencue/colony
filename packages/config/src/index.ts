@@ -5,6 +5,7 @@ export {
   type BridgePolicyMode,
   type CompressionIntensity,
   type EmbeddingProvider,
+  type McpToolProfile,
 } from './schema.js';
 export { defaultSettings } from './defaults.js';
 export {

@@ -2,6 +2,17 @@
 
 colony exposes MCP tools over a stdio server. IDE installers register that server as `colony`, so agent tool calls appear under the `colony` namespace. The design goal is **progressive disclosure**: hits are compact until the agent asks for more.
 
+## Tool profiles
+
+Every registered tool costs every agent session schema-injection context tokens whether or not it is ever called, so the server gates its surface behind a profile:
+
+- **`lean` (default)** registers the ~20 high-traffic memory + coordination tools a typical coding session actually uses: `startup_panel`, `hivemind`, `hivemind_context`, `attention_inbox`, `task_ready_for_agent`, `search`, `get_observations`, `task_list`, `task_post`, `task_note_working`, `task_claim_file`, `task_claim_quota_accept`, `task_claim_quota_decline`, `task_message`, `task_messages`, `task_message_mark_read`, `task_accept_handoff`, `task_decline_handoff`, `bridge_status`, `recall_session`.
+- **`full`** registers everything: plan, spec, foraging, memoir, proposal, relay, account-claims, rescue, savings, autopilot, drift, queen, suggest, feedback, profile, and the remaining memory/task tools.
+
+Selection order: the `COLONY_TOOL_PROFILE` env var (`lean` | `full`) wins, then `settings.mcp.toolProfile`, then the `lean` default. The MCP SDK cannot re-register tools mid-session, so switching profiles requires restarting the server process. Lanes that publish or claim plan subtasks, run spec lifecycle, or manage memoirs (e.g. a queen/planner lane) should set `COLONY_TOOL_PROFILE=full` in their MCP spawn config.
+
+The canonical lean list lives in `apps/mcp-server/src/tools/tool-profile.ts` (`LEAN_TOOLS`); changing it is an MCP contract change.
+
 For memory lookup, the recommended workflow is **search first, hydrate later**:
 
 1. Before implementation, call `search` with query-rich terms from the task: feature name, package name, file path, task slug, or exact error message.

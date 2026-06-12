@@ -6,7 +6,7 @@ import { MemoryStore, PheromoneSystem, TaskThread } from '@colony/core';
 import { Client } from '@modelcontextprotocol/sdk/client';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildServer } from '../src/server.js';
+import { LEAN_TOOLS, buildServer, resolveToolProfile } from '../src/server.js';
 
 let dir: string;
 let store: MemoryStore;
@@ -1714,5 +1714,89 @@ describe('MCP server', () => {
       nowSpy.mockRestore();
       rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe('tool profiles', () => {
+  it('lean profile registers exactly the LEAN_TOOLS surface', async () => {
+    const leanDir = mkdtempSync(join(tmpdir(), 'colony-mcp-lean-'));
+    const leanStore = new MemoryStore({
+      dbPath: join(leanDir, 'data.db'),
+      settings: defaultSettings,
+    });
+    const server = buildServer(leanStore, defaultSettings, { toolProfile: 'lean' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const leanClient = new Client({ name: 'test', version: '0.0.0' });
+    try {
+      await Promise.all([server.connect(serverTransport), leanClient.connect(clientTransport)]);
+      const { tools } = await leanClient.listTools();
+      expect(tools.map((t) => t.name).sort()).toEqual([...LEAN_TOOLS].sort());
+      expect(tools.map((t) => t.name).sort()).toEqual([
+        'attention_inbox',
+        'bridge_status',
+        'get_observations',
+        'hivemind',
+        'hivemind_context',
+        'recall_session',
+        'search',
+        'startup_panel',
+        'task_accept_handoff',
+        'task_claim_file',
+        'task_claim_quota_accept',
+        'task_claim_quota_decline',
+        'task_decline_handoff',
+        'task_list',
+        'task_message',
+        'task_message_mark_read',
+        'task_messages',
+        'task_note_working',
+        'task_post',
+        'task_ready_for_agent',
+      ]);
+    } finally {
+      await leanClient.close();
+      leanStore.close();
+      rmSync(leanDir, { recursive: true, force: true });
+    }
+  });
+
+  it('lean tools stay callable through the gated registrar', async () => {
+    const leanDir = mkdtempSync(join(tmpdir(), 'colony-mcp-lean-call-'));
+    const leanStore = new MemoryStore({
+      dbPath: join(leanDir, 'data.db'),
+      settings: defaultSettings,
+    });
+    leanStore.startSession({ id: 'lean-s1', ide: 'test', cwd: '/tmp' });
+    leanStore.addObservation({
+      session_id: 'lean-s1',
+      kind: 'note',
+      content: 'lean profile smoke observation about caveman.conf',
+    });
+    const server = buildServer(leanStore, defaultSettings, { toolProfile: 'lean' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const leanClient = new Client({ name: 'test', version: '0.0.0' });
+    try {
+      await Promise.all([server.connect(serverTransport), leanClient.connect(clientTransport)]);
+      const result = await leanClient.callTool({
+        name: 'search',
+        arguments: { query: 'caveman' },
+      });
+      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? '[]';
+      const hits = JSON.parse(text) as Array<{ id: number }>;
+      expect(hits.length).toBeGreaterThan(0);
+    } finally {
+      await leanClient.close();
+      leanStore.close();
+      rmSync(leanDir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolveToolProfile: env override wins, settings default is lean', () => {
+    expect(resolveToolProfile(defaultSettings, {})).toBe('lean');
+    expect(resolveToolProfile(defaultSettings, { COLONY_TOOL_PROFILE: 'full' })).toBe('full');
+    expect(resolveToolProfile(defaultSettings, { COLONY_TOOL_PROFILE: 'lean' })).toBe('lean');
+    expect(resolveToolProfile(defaultSettings, { COLONY_TOOL_PROFILE: 'bogus' })).toBe('lean');
+    const fullSettings = { ...defaultSettings, mcp: { toolProfile: 'full' as const } };
+    expect(resolveToolProfile(fullSettings, {})).toBe('full');
   });
 });

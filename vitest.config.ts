@@ -25,6 +25,12 @@ export default defineConfig({
     alias: workspaceAliases,
   },
   test: {
+    // Behavior tests exercise the full tool surface; the lean default would
+    // hide most tools from them. Lean-profile coverage passes
+    // { toolProfile: 'lean' } to buildServer explicitly (server.test.ts).
+    env: {
+      COLONY_TOOL_PROFILE: 'full',
+    },
     server: {
       deps: {
         external: [/better-sqlite3/],
