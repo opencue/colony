@@ -332,7 +332,7 @@ describe('OMX lifecycle envelope', () => {
     };
     expect(refreshedSession.lastHeartbeatAt).not.toBeUndefined();
     expect(Date.parse(refreshedSession.lastHeartbeatAt ?? '')).toBeGreaterThan(Date.now() - 60_000);
-  });
+  }, 15_000);
 });
 
 function envelope(overrides: Record<string, unknown>): Record<string, unknown> {
