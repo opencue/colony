@@ -146,6 +146,20 @@ export interface InboxFileHeat {
   event_count: number;
 }
 
+/**
+ * Latest working note from another live session on an in-scope task — the
+ * "what is everyone doing right now" line. One entry per other session,
+ * 30-minute window, preview only (hydrate with get_observations).
+ */
+export interface InboxWorkingNote {
+  task_id: number;
+  observation_id: number;
+  session_id: string;
+  agent: string;
+  ts: number;
+  preview: string;
+}
+
 export interface InboxStaleClaimBranch {
   repo_root: string;
   branch: string;
@@ -276,6 +290,7 @@ export interface AttentionInbox {
     recent_other_claim_count: number;
     live_file_contention_count: number;
     hot_file_count: number;
+    active_working_note_count: number;
     omx_runtime_warning_count: number;
     /**
      * True iff at least one unread message is `urgency='blocking'`. The
@@ -304,6 +319,7 @@ export interface AttentionInbox {
   recent_other_claims: InboxRecentClaim[];
   live_file_contentions: LiveFileContentionWarning[];
   file_heat: InboxFileHeat[];
+  active_working_notes: InboxWorkingNote[];
   omx_runtime_warnings: InboxOmxRuntimeWarning[];
 }
 
@@ -443,6 +459,7 @@ export function buildAttentionInbox(
   const stalled_lanes = stalledLaneResult.rows;
   const paused_lanes = collectPausedLanes(store, opts);
   const file_heat = collectFileHeat(store, opts, taskIds, now);
+  const active_working_notes = collectActiveWorkingNotes(store, opts, taskIds, now);
   const omx_runtime_warnings = collectOmxRuntimeWarnings(store, opts, taskIds, now);
 
   const read_receipts = collectReadReceipts(store, opts, taskIds, now);
@@ -467,6 +484,7 @@ export function buildAttentionInbox(
     recent_other_claim_count: recent_other_claims.length,
     live_file_contention_count: live_file_contentions.length,
     hot_file_count: file_heat.length,
+    active_working_note_count: active_working_notes.length,
     omx_runtime_warning_count: omx_runtime_warnings.length,
     blocked,
     next_action: deriveNextAction({
@@ -505,6 +523,7 @@ export function buildAttentionInbox(
     recent_other_claims,
     live_file_contentions,
     file_heat,
+    active_working_notes,
     omx_runtime_warnings,
   };
 }
@@ -1187,6 +1206,63 @@ function staleClaimSweepSuggestion(staleClaimCount: number, expiredWeakClaimCoun
     return `run coordination sweep dry-run; review ${staleClaimCount} stale advisory claim(s), including ${expiredWeakClaimCount} expired/weak claim(s); keep audit history`;
   }
   return `run coordination sweep dry-run; review ${staleClaimCount} stale advisory claim(s) before release or handoff`;
+}
+
+const WORKING_NOTE_WINDOW_MS = 30 * 60_000;
+const WORKING_NOTE_PREVIEW_CHARS = 120;
+const WORKING_NOTE_SCAN_LIMIT = 30;
+
+/**
+ * Latest `task_note_working` note per other session per in-scope task.
+ * Working notes are kind:'note' observations stamped metadata.working_note —
+ * the closest thing to a live "now line" each agent maintains.
+ */
+function collectActiveWorkingNotes(
+  store: MemoryStore,
+  opts: AttentionInboxOptions,
+  taskIds: number[],
+  now: number,
+): InboxWorkingNote[] {
+  const since = now - WORKING_NOTE_WINDOW_MS;
+  const notes: InboxWorkingNote[] = [];
+  for (const task_id of taskIds) {
+    const agentBySession = new Map(
+      new TaskThread(store, task_id).participants().map((p) => [p.session_id, p.agent]),
+    );
+    const seenSessions = new Set<string>();
+    for (const row of store.storage.taskObservationsByKind(
+      task_id,
+      'note',
+      WORKING_NOTE_SCAN_LIMIT,
+    )) {
+      if (row.ts < since) break; // rows are ts DESC
+      if (row.session_id === opts.session_id) continue;
+      if (seenSessions.has(row.session_id)) continue;
+      if (!isWorkingNoteMetadata(row.metadata)) continue;
+      seenSessions.add(row.session_id);
+      notes.push({
+        task_id,
+        observation_id: row.id,
+        session_id: row.session_id,
+        agent: agentBySession.get(row.session_id) ?? 'agent',
+        ts: row.ts,
+        // Normalize whitespace so multi-line note content cannot break
+        // single-line renderers (preface lines, compact inbox rows).
+        preview: row.content.slice(0, WORKING_NOTE_PREVIEW_CHARS).replace(/\s+/g, ' ').trim(),
+      });
+    }
+  }
+  return notes.sort((a, b) => b.ts - a.ts);
+}
+
+function isWorkingNoteMetadata(metadata: string | null): boolean {
+  if (!metadata) return false;
+  try {
+    const parsed = JSON.parse(metadata) as { working_note?: unknown };
+    return parsed.working_note === true;
+  } catch {
+    return false;
+  }
 }
 
 function collectFileHeat(

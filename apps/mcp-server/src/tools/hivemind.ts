@@ -57,6 +57,7 @@ export function register(server: McpServer, ctx: ToolContext): void {
       if (repo_roots !== undefined) options.repoRoots = repo_roots;
       if (include_stale !== undefined) options.includeStale = include_stale;
       if (limit !== undefined) options.limit = limit;
+      options.sqliteLiveness = store.storage;
       const snapshot = readHivemind(options);
       return { content: [{ type: 'text', text: JSON.stringify(snapshot) }] };
     }),
@@ -103,9 +104,12 @@ export function register(server: McpServer, ctx: ToolContext): void {
         const attentionIdentity = resolveAttentionIdentity(session_id, agent);
         const laneLimit =
           limit ?? (localMode ? DEFAULT_LOCAL_CONTEXT_LANE_LIMIT : DEFAULT_CONTEXT_LANE_LIMIT);
-        const snapshot = readHivemind(
-          toHivemindOptions({ repo_root, repo_roots, include_stale, limit: laneLimit }),
-        );
+        const snapshot = readHivemind({
+          ...toHivemindOptions({ repo_root, repo_roots, include_stale, limit: laneLimit }),
+          // Unified liveness: heartbeat-stale lanes with fresh SQLite
+          // observations come back as working (liveness_source: 'sqlite').
+          sqliteLiveness: store.storage,
+        });
         const memoryLimit = memory_limit ?? DEFAULT_CONTEXT_MEMORY_LIMIT;
         const maxClaims = max_claims ?? DEFAULT_CONTEXT_CLAIM_LIMIT;
         const maxHotFiles = max_hot_files ?? DEFAULT_CONTEXT_HOT_FILE_LIMIT;

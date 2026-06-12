@@ -187,3 +187,87 @@ function writeActiveSession(
     'utf8',
   );
 }
+
+describe('unified SQLite liveness', () => {
+  function writeActiveSession(repoRoot: string, sessionKey: string, lastHeartbeatAt: string): void {
+    const activeSessionDir = join(repoRoot, '.omx', 'state', 'active-sessions');
+    mkdirSync(activeSessionDir, { recursive: true });
+    writeFileSync(
+      join(activeSessionDir, `${sessionKey}.json`),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        repoRoot,
+        branch: 'main',
+        taskName: 'liveness probe',
+        sessionKey,
+        worktreePath: repoRoot,
+        startedAt: lastHeartbeatAt,
+        lastHeartbeatAt,
+        state: 'working',
+      })}\n`,
+      'utf8',
+    );
+  }
+
+  it('reclassifies a heartbeat-stale session as working when SQLite shows fresh observations', () => {
+    dir = mkdtempSync(join(tmpdir(), 'colony-hivemind-liveness-'));
+    const repoRoot = join(dir, 'repo');
+    const now = Date.now();
+    const staleHeartbeat = new Date(now - 20 * 60_000).toISOString();
+    writeActiveSession(repoRoot, 'sql-fresh', staleHeartbeat);
+
+    const snapshot = readHivemind({
+      repoRoot,
+      now,
+      includeStale: true,
+      sqliteLiveness: {
+        lastObservationTsForSession: (id) => (id === 'sql-fresh' ? now - 60_000 : 0),
+      },
+    });
+
+    expect(snapshot.sessions[0]).toMatchObject({
+      session_key: 'sql-fresh',
+      activity: 'working',
+      liveness_source: 'sqlite',
+    });
+    expect(snapshot.sessions[0]?.activity_summary).toContain('SQLite observations');
+  });
+
+  it('leaves a stale session untouched when SQLite has nothing fresh', () => {
+    dir = mkdtempSync(join(tmpdir(), 'colony-hivemind-liveness-'));
+    const repoRoot = join(dir, 'repo');
+    const now = Date.now();
+    writeActiveSession(repoRoot, 'sql-stale', new Date(now - 20 * 60_000).toISOString());
+
+    const snapshot = readHivemind({
+      repoRoot,
+      now,
+      includeStale: true,
+      sqliteLiveness: { lastObservationTsForSession: () => now - 60 * 60_000 },
+    });
+
+    expect(snapshot.sessions[0]?.activity).not.toBe('working');
+    expect(snapshot.sessions[0]?.liveness_source).toBe('heartbeat');
+  });
+
+  it('survives a throwing liveness source', () => {
+    dir = mkdtempSync(join(tmpdir(), 'colony-hivemind-liveness-'));
+    const repoRoot = join(dir, 'repo');
+    const now = Date.now();
+    writeActiveSession(repoRoot, 'sql-throws', new Date(now - 20 * 60_000).toISOString());
+
+    const snapshot = readHivemind({
+      repoRoot,
+      now,
+      includeStale: true,
+      sqliteLiveness: {
+        lastObservationTsForSession: () => {
+          throw new Error('db locked');
+        },
+      },
+    });
+
+    expect(snapshot.session_count).toBe(1);
+    expect(snapshot.sessions[0]?.liveness_source).toBe('heartbeat');
+  });
+});

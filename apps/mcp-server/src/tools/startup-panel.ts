@@ -151,6 +151,7 @@ export async function buildStartupPanel(
   const snapshot = readHivemind({
     ...(args.repo_root !== undefined ? { repoRoot: args.repo_root } : {}),
     limit: STARTUP_LANE_LIMIT,
+    sqliteLiveness: store.storage,
   });
   const activeTask = resolveActiveTask(store, args);
   const scopedRepoRoot = args.repo_root ?? activeTask?.repo_root ?? null;

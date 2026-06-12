@@ -122,14 +122,15 @@ export async function buildBridgeStatusPayload(
   store: MemoryStore,
   { session_id, agent, repo_root, branch, query }: BridgeStatusOptions,
 ): Promise<BridgeStatus> {
-  const snapshot = readHivemind(
-    toHivemindOptions({
+  const snapshot = readHivemind({
+    ...toHivemindOptions({
       repo_root,
       repo_roots: undefined,
       include_stale: true,
       limit: BRIDGE_LANE_LIMIT,
     }),
-  );
+    sqliteLiveness: store.storage,
+  });
   const attentionInbox = buildAttentionInbox(store, {
     session_id,
     agent,

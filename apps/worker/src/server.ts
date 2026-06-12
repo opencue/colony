@@ -56,7 +56,7 @@ export function buildApp(
   options: WorkerAppOptions = {},
 ): Hono {
   const app = new Hono();
-  const readCachedHivemind = createHivemindReader(options);
+  const readCachedHivemind = createHivemindReader(store, options);
   const reportBuilder = options.discrepancyReportBuilder ?? buildDiscrepancyReport;
 
   app.use('*', async (_c, next) => {
@@ -565,20 +565,28 @@ function safeJsonObject(raw: string | null): Record<string, unknown> {
   }
 }
 
-function createHivemindReader(options: WorkerAppOptions): () => ReturnType<typeof readHivemind> {
+function createHivemindReader(
+  store: MemoryStore,
+  options: WorkerAppOptions,
+): () => ReturnType<typeof readHivemind> {
   let cached: ReturnType<typeof readHivemind> | null = null;
   let cachedAt = 0;
   return () => {
     const now = Date.now();
     if (cached && now - cachedAt < HIVEMIND_CACHE_TTL_MS) return cached;
-    cached = readWorkerHivemind(options);
+    cached = readWorkerHivemind(store, options);
     cachedAt = now;
     return cached;
   };
 }
 
-function readWorkerHivemind(options: WorkerAppOptions): ReturnType<typeof readHivemind> {
-  const input: HivemindOptions = { limit: 20 };
+function readWorkerHivemind(
+  store: MemoryStore,
+  options: WorkerAppOptions,
+): ReturnType<typeof readHivemind> {
+  // Same unified liveness as the MCP hivemind tools — the viewer must not
+  // show a SQLite-alive lane as dead.
+  const input: HivemindOptions = { limit: 20, sqliteLiveness: store.storage };
   if (options.hivemindRepoRoots?.length) {
     input.repoRoots = options.hivemindRepoRoots;
   }

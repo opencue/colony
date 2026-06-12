@@ -185,3 +185,35 @@ describe('buildConflictPreface path & session-id compaction', () => {
     expect(preface).toContain('apps/frontend/src/utils/account-working.ts');
   });
 });
+
+describe('buildTaskPreface working-note now lines', () => {
+  it('shows up to 3 co-participant working notes after the joined-with line', () => {
+    store.startSession({ id: 'me', ide: 'claude-code', cwd: repo });
+    const thread = TaskThread.open(store, {
+      repo_root: repo,
+      branch: 'feat/trim',
+      session_id: 'me',
+    });
+    thread.join('me', 'claude');
+    for (let i = 0; i < 4; i += 1) {
+      const sid = `noter-${i}-aaaaaaaa`;
+      seedJoinedParticipant(thread, sid, 'codex', { recentObservation: true });
+      thread.post({
+        session_id: sid,
+        kind: 'note',
+        content: `working on packages/core/src/file-${i}.ts`,
+        metadata: { working_note: true },
+      });
+    }
+
+    const preface = buildTaskPreface(store, {
+      session_id: 'me',
+      cwd: repo,
+      ide: 'claude-code',
+    });
+
+    const nowLines = (preface.match(/ {2}now: codex@noter-/g) ?? []).length;
+    expect(nowLines).toBe(3);
+    expect(preface).toContain('packages/core/src/file-');
+  });
+});
