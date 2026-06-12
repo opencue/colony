@@ -66,14 +66,43 @@ describe('filterReadyForExecutor', () => {
   ];
 
   it('hides proposal work from scout actors', () => {
-    expect(filterReadyForExecutor(rows, 'scout')).toEqual([]);
+    expect(filterReadyForExecutor(rows, 'scout', 'guarded')).toEqual([]);
   });
 
   it('shows only normal and approved proposal work to executors', () => {
-    expect(filterReadyForExecutor(rows, 'executor').map((row) => row.id)).toEqual([1, 3]);
+    expect(filterReadyForExecutor(rows, 'executor', 'guarded').map((row) => row.id)).toEqual([
+      1, 3,
+    ]);
   });
 
   it('leaves all work visible for queen actors', () => {
-    expect(filterReadyForExecutor(rows, 'queen')).toEqual(rows);
+    expect(filterReadyForExecutor(rows, 'queen', 'guarded')).toEqual(rows);
+  });
+});
+
+describe('open coordination mode', () => {
+  it('lets scouts claim and shows executors every proposal', () => {
+    const openStore = new MemoryStore({
+      dbPath: join(dataDir, 'open.db'),
+      settings: { ...defaultSettings, coordinationMode: 'open' },
+    });
+    try {
+      openStore.storage.upsertAgentProfile({
+        agent: 'scout-open',
+        capabilities: '{}',
+        role: 'scout',
+        updated_at: 1,
+      });
+      expect(() => enforceScoutNoClaim(openStore, { agent: 'scout-open' })).not.toThrow();
+      const rows = [
+        { id: 1, proposal_status: null },
+        { id: 2, proposal_status: 'proposed' as const },
+        { id: 3, proposal_status: 'approved' as const },
+      ];
+      expect(filterReadyForExecutor(rows, 'executor', 'open').map((r) => r.id)).toEqual([1, 2, 3]);
+      expect(filterReadyForExecutor(rows, 'scout', 'open').map((r) => r.id)).toEqual([1, 2, 3]);
+    } finally {
+      openStore.close();
+    }
   });
 });

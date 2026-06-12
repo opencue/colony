@@ -731,6 +731,7 @@ export function attemptClaimPlanSubtask(
     .filter((s): s is SubtaskLookup => s !== null)
     .map((s) => s.info);
 
+  let forcedUnmetDeps: number[] = [];
   if (!areDepsMet(located.info, siblings)) {
     const unmet = located.info.depends_on.filter((idx) => {
       const dep = siblings.find((s) => s.subtask_index === idx);
@@ -743,15 +744,7 @@ export function attemptClaimPlanSubtask(
         message: `dependencies not met: sub-tasks [${unmet.join(', ')}] are not completed`,
       };
     }
-    // Forced past unmet deps: leave an audit note on the sub-task thread so
-    // the override is visible to the plan owner and later sessions.
-    store.addObservation({
-      session_id: args.session_id,
-      task_id: located.task_id,
-      kind: 'note',
-      content: `force-claimed sub-${args.subtask_index} of ${args.plan_slug} past unmet deps [${unmet.join(', ')}]`,
-      metadata: { kind: 'plan-subtask-force-claim', unmet_deps: unmet },
-    });
+    forcedUnmetDeps = unmet;
   }
 
   try {
@@ -797,6 +790,18 @@ export function attemptClaimPlanSubtask(
                 guarded.recommendation ?? 'request handoff or explicit takeover before claiming',
             };
           }
+        }
+        // Audit the dep override only once the claim is actually happening —
+        // written outside this transaction it would record force-claims that
+        // lost the race and never occurred.
+        if (forcedUnmetDeps.length > 0) {
+          store.addObservation({
+            session_id: args.session_id,
+            task_id: fresh.task_id,
+            kind: 'note',
+            content: `force-claimed sub-${args.subtask_index} of ${args.plan_slug} past unmet deps [${forcedUnmetDeps.join(', ')}]`,
+            metadata: { kind: 'plan-subtask-force-claim', unmet_deps: forcedUnmetDeps },
+          });
         }
         store.addObservation({
           session_id: args.session_id,

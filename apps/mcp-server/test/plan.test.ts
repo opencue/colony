@@ -879,6 +879,41 @@ describe('task_plan_claim_subtask', () => {
     expect(err.code).toBe('PLAN_SUBTASK_DEPS_UNMET');
   });
 
+  it('force=true claims past unmet deps and records an audit note', async () => {
+    await call<PublishResult>('task_plan_publish', basicPublishArgs());
+    const claimed = await call<{ task_id: number }>('task_plan_claim_subtask', {
+      plan_slug: 'add-widget-page',
+      subtask_index: 1,
+      session_id: 'B',
+      agent: 'codex',
+      force: true,
+    });
+    expect(claimed.task_id).toBeGreaterThan(0);
+    const notes = store.storage
+      .taskObservationsByKind(claimed.task_id, 'note', 10)
+      .filter((o) => o.metadata?.includes('plan-subtask-force-claim'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.content).toContain('past unmet deps [0]');
+  });
+
+  it('force=true does not bypass the already-claimed race check', async () => {
+    await call<PublishResult>('task_plan_publish', basicPublishArgs());
+    await call('task_plan_claim_subtask', {
+      plan_slug: 'add-widget-page',
+      subtask_index: 0,
+      session_id: 'A',
+      agent: 'claude',
+    });
+    const err = await callError('task_plan_claim_subtask', {
+      plan_slug: 'add-widget-page',
+      subtask_index: 0,
+      session_id: 'B',
+      agent: 'codex',
+      force: true,
+    });
+    expect(err.code).toBe('PLAN_SUBTASK_NOT_AVAILABLE');
+  });
+
   it('rejects a second claim on an already-claimed sub-task (race)', async () => {
     // The load-bearing test for the lane: two agents racing on the same
     // available sub-task. The transaction-based scan-before-stamp inside the

@@ -40,7 +40,7 @@ export function enforceScoutNoClaim(store: MemoryStore, ctx: ClaimActorContext):
 export function filterReadyForExecutor<T extends ProposalReadyRow>(
   rows: readonly T[],
   role: AgentRole,
-  mode: 'open' | 'guarded' = 'guarded',
+  mode: 'open' | 'guarded',
 ): T[] {
   // Open mode: every agent sees every proposal, approved or not.
   if (mode === 'open') return [...rows];
