@@ -445,6 +445,15 @@ function formatDuration(ms: number): string {
 // whole preface budget on its own.
 const PRIOR_SUMMARY_CHAR_CAP = 300;
 
+function truncateAtCap(text: string, cap: number): string {
+  if (text.length <= cap) return text;
+  let end = cap;
+  // Back off a lone high surrogate so the cut never splits a code point.
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
+
 function buildPriorPreface(store: MemoryStore, input: HookInput): string {
   // For resume/clear/compact the agent already has its own context; injecting
   // a "Prior-session context" preface would be noisy and possibly stale.
@@ -455,10 +464,7 @@ function buildPriorPreface(store: MemoryStore, input: HookInput): string {
     .slice(0, 3)
     .map((s) => {
       const summaries = store.storage.listSummaries(s.id).slice(0, 1);
-      const text = summaries.map((x) => x.content).join('\n');
-      return text.length > PRIOR_SUMMARY_CHAR_CAP
-        ? `${text.slice(0, PRIOR_SUMMARY_CHAR_CAP)}…`
-        : text;
+      return truncateAtCap(summaries.map((x) => x.content).join('\n'), PRIOR_SUMMARY_CHAR_CAP);
     })
     .filter(Boolean);
   if (hints.length === 0) return '';
