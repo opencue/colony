@@ -229,17 +229,6 @@ function isGitWorktree(worktreePath: string): boolean {
   return topLevel !== null && canonicalPath(topLevel) === canonicalPath(worktreePath);
 }
 
-function canonicalPath(path: string): string {
-  try {
-    // .native resolves macOS symlinks (/var -> /private/var) and expands
-    // Windows 8.3 short names to the long form git's --show-toplevel returns,
-    // so both sides of the isGitWorktree comparison agree.
-    return realpathSync.native(path);
-  } catch {
-    return resolve(path);
-  }
-}
-
 function readWorktreeBranch(worktreePath: string): string {
   const branch = gitText(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
   if (branch && branch !== 'HEAD') return branch;
