@@ -85,7 +85,9 @@ export function gateToolRegistration(
  * Registration-cost telemetry captured while tools register. Token figure
  * covers name + description only — input schemas are zod shapes here and only
  * become countable JSON schema at listTools time; the schema-inclusive budget
- * lives in apps/mcp-server/test/tool-budget.test.ts.
+ * lives in apps/mcp-server/test/tool-budget.test.ts. Tools registered via the
+ * SDK's schema-first overload (no description string) count name-only — a
+ * known undercount, acceptable for trend telemetry.
  */
 export interface ToolRegistrationStats {
   profile: McpToolProfile;

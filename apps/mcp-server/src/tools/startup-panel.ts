@@ -217,7 +217,7 @@ export async function buildStartupPanel(
         agent: lane.agent,
         branch: lane.branch,
         activity: lane.activity,
-        task: lane.task.slice(0, 80),
+        task: lane.task.replace(/[\r\n]+/g, ' ').slice(0, 80),
       })),
     },
     attention_summary: {
