@@ -1,5 +1,28 @@
 # @colony/installers
 
+## 0.8.0
+
+### Minor Changes
+
+- 86a3d1a: `colony install --ide claude-code --verify` now works. The claude-code installer
+  gained a `verify()` implementation (it previously threw "does not support
+  --verify" despite the flag being advertised): it validates ~/.claude/settings.json
+  for the colony MCP server, all six hooks, and any detected OMX-layer MCP servers,
+  reporting missing/stale hooks per the same contract codex uses. The generic
+  validation helpers (sameArgs, missingDetectedOmxServers, validationIssue) moved
+  to a shared `validation.ts` module so both installers reuse them.
+
+### Patch Changes
+
+- Updated dependencies [b6e2ad4]
+- Updated dependencies [86a3d1a]
+- Updated dependencies [7aba1eb]
+- Updated dependencies [3b86d74]
+- Updated dependencies [7770b58]
+- Updated dependencies [60c3123]
+- Updated dependencies [8a15958]
+  - @colony/config@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes

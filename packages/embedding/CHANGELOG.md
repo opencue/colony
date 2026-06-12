@@ -1,5 +1,36 @@
 # @colony/embedding
 
+## 0.8.0
+
+### Minor Changes
+
+- b6e2ad4: Add `codex-gpu` embedding provider that targets the recodee
+  `codex-gpu-embedder` HTTP service (`POST /embed`).
+
+  When `settings.embedding.provider = 'codex-gpu'`, the worker hits the
+  local GPU embedder over HTTP instead of running Transformers.js in
+  process. Endpoint defaults to `http://127.0.0.1:8100`; override via
+  `settings.embedding.endpoint`. Captures `dim` from a one-shot warm-up
+  probe at init time, matching every other provider's contract.
+
+  The recodee dev box measures ~16 ms per single embed on the GPU vs ~200
+  ms on local CPU, so the worker's embedding-backfill loop completes
+  roughly 14× faster when configured this way. Behavior unchanged for any
+  deployment that does not opt in via the new provider value.
+
+### Patch Changes
+
+- cdf22de: Batch worker observation embedding calls and add batch-capable embedder providers.
+- 60c3123: Changed the embedding backfill loop to send one batch of texts to embedders that support `embedBatch`, default worker batches to 32 observations, and persist each batch in a single SQLite transaction. The codex-gpu provider now calls `/embed/batch`, while storage copies returned embedding buffers so vector reads do not alias SQLite row memory.
+- Updated dependencies [b6e2ad4]
+- Updated dependencies [86a3d1a]
+- Updated dependencies [7aba1eb]
+- Updated dependencies [3b86d74]
+- Updated dependencies [7770b58]
+- Updated dependencies [60c3123]
+- Updated dependencies [8a15958]
+  - @colony/config@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes
