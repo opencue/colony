@@ -165,6 +165,12 @@ export class SpecRepository {
   archiveChange(slug: string, date: string = todayIso()): string {
     const changeDir = dirname(this.changePath(slug));
     const archiveTarget = join(this.repoRoot, LAYOUT.archiveDir, `${date}-${slug}`);
+    // Fail deterministically if the target exists. POSIX renameSync(dir, file)
+    // throws ENOTDIR, but Windows MoveFileEx would silently clobber the file —
+    // so check explicitly rather than relying on rename to error.
+    if (existsSync(archiveTarget)) {
+      throw new Error(`archive target already exists: ${archiveTarget}`);
+    }
     mkdirSync(dirname(archiveTarget), { recursive: true });
 
     // Stage: rename into a sibling `.archive-staging-<slug>` directory,

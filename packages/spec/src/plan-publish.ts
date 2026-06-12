@@ -152,8 +152,10 @@ export function publishPlan(args: PublishPlanInput): PublishPlanResult {
   return {
     plan_slug: args.slug,
     spec_task_id: opened.task_id,
-    spec_change_path: opened.path,
-    plan_workspace_path: workspace.dir,
+    // Forward-slash the returned paths so MCP callers get separator-stable
+    // result data across OSes (these are reference paths, not used for fs here).
+    spec_change_path: opened.path.replace(/\\/g, '/'),
+    plan_workspace_path: workspace.dir.replace(/\\/g, '/'),
     subtasks: subtaskThreads,
   };
 }
