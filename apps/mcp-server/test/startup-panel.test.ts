@@ -15,6 +15,12 @@ let client: Client;
 
 interface StartupPanel {
   session_id: string;
+  tool_profile: 'lean' | 'full';
+  compact_hivemind: {
+    lane_count: number;
+    lanes: Array<{ agent: string; branch: string; activity: string; task: string }>;
+  };
+  attention_summary: { unread: number; blocking: boolean; pending_handoffs: number };
   repo_root: string | null;
   branch: string | null;
   active_task: { id: number; title: string; branch: string } | null;
@@ -116,6 +122,16 @@ describe('startup_panel', () => {
       recommended_next_tool: 'task_ready_for_agent',
     });
     expect(panel.copy_paste_next_mcp_calls[0]).toContain('mcp__colony__task_ready_for_agent');
+    // One-call startup additions: the panel alone answers "who else is
+    // active", "anything blocking", and "which tool surface am I on".
+    expect(panel.tool_profile).toBe('full');
+    expect(panel.compact_hivemind).toMatchObject({ lane_count: expect.any(Number) });
+    expect(Array.isArray(panel.compact_hivemind.lanes)).toBe(true);
+    expect(panel.attention_summary).toEqual({
+      unread: 0,
+      blocking: false,
+      pending_handoffs: 0,
+    });
   });
 
   it('summarizes an active task with blocker, next step, evidence, and claims', async () => {

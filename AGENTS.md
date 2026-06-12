@@ -65,12 +65,18 @@ Promote to full Guardex / OMX orchestration only when scope grows into:
 
 Use Colony as the primary coordination surface.
 
-On every startup, resume, follow-up, or "continue" request, run this order:
+On every startup, resume, follow-up, or "continue" request, make ONE call:
 
-1. `mcp__colony__hivemind_context`
-2. `mcp__colony__attention_inbox`
-3. `mcp__colony__task_ready_for_agent`
-4. `mcp__colony__search` only when prior decisions, earlier lanes, file history, or error context matter.
+1. `mcp__colony__startup_panel` — returns the active task, compact lane map (who else is working — what `mcp__colony__hivemind_context` used to provide), attention summary, blocking items, ready work, claims, blocker/next/evidence, and the exact next MCP call.
+
+Escalate only when the panel says so:
+
+- `attention_summary.blocking` is true or `blocking_items` is non-empty → `mcp__colony__attention_inbox`.
+- Picking new work and `ready_task` is null → `mcp__colony__task_ready_for_agent`.
+- Prior decisions, earlier lanes, file history, or error context matter → `mcp__colony__search`.
+- `tool_profile` is `lean` and you need plan/spec/memoir tools → restart the MCP server with `COLONY_TOOL_PROFILE=full`.
+
+The legacy 4-call sweep (`mcp__colony__hivemind_context` → `mcp__colony__attention_inbox` → `mcp__colony__task_ready_for_agent` → `mcp__colony__search`) still works but spends ~3 extra calls of context per session; prefer the panel.
 
 Rules:
 
@@ -85,7 +91,7 @@ Rules:
 Fallback:
 
 - Colony is considered unavailable only when the MCP namespace is missing, the tool call fails, or the installed Colony server does not expose the required tool.
-- If `attention_inbox` or `task_ready_for_agent` is missing, fall back to `hivemind_context`, then `task_list`, then hydrate only the relevant task IDs.
+- If `startup_panel` is missing, fall back to the legacy sweep (`hivemind_context` → `attention_inbox` → `task_ready_for_agent`); if those are missing too, `task_list`, then hydrate only the relevant task IDs.
 - Do not skip Colony just because OMX state exists. OMX is fallback, not the first coordination source.
 - Read `.omx/state` and `.omx/notepad.md` only when Colony is unavailable, missing the needed state, or the task explicitly depends on legacy OMX state.
 - Keep `.omx/notepad.md` lean: live handoffs only.

@@ -23,13 +23,17 @@ Use `list_sessions` -> `timeline` when you need to navigate a known session inst
 
 ## Agent startup loop
 
-Agent startup, resume, "what needs me?", and "what should I do next?" flows should call these first:
+Agent startup, resume, "what needs me?", and "what should I do next?" flows make ONE call:
 
-1. `hivemind_context` to see active agents, owned branches, live lanes, compact memory hits, and relevant negative warnings.
-2. `attention_inbox` to see what needs your attention: handoffs, messages, wakes, stalled lanes, fresh claims, stale-claim cleanup signals, and decaying hot files.
-3. `task_ready_for_agent` to choose available work matched to the current agent.
+1. `startup_panel` — active task, compact lane map (`compact_hivemind`), `attention_summary`, blocking items, ready work, claims, blocker/next/evidence, `tool_profile`, and the exact next MCP call.
 
-Do not choose work before attention_inbox.
+Escalate only when the panel says so:
+
+1. `hivemind_context` when you need full progressive-disclosure lane detail, compact memory hits, or negative warnings beyond the panel's lane map.
+2. `attention_inbox` when `attention_summary.blocking` is true or `blocking_items` is non-empty: handoffs, messages, wakes, stalled lanes, fresh claims, stale-claim cleanup signals, and decaying hot files.
+3. `task_ready_for_agent` to choose available work when the panel's `ready_task` is null.
+
+Do not choose work before checking blocking items (panel or attention_inbox).
 
 Codex-style MCP tool names include the server prefix:
 `mcp__colony__hivemind_context`,

@@ -14,6 +14,8 @@ export interface ToolContext {
   settings: Settings;
   /** Active MCP tool surface. Absent means 'full' (direct register() callers in tests). */
   toolProfile?: McpToolProfile;
+  /** Registration-cost telemetry filled while buildServer registers tools. */
+  registrationStats?: import('./tool-profile.js').ToolRegistrationStats;
   planValidation?: PlanValidationRuntime;
   /**
    * Lazy-singleton embedder. Returns null when the provider is `none` or the
