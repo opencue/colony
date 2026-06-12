@@ -1,5 +1,298 @@
 # @colony/core
 
+## 0.8.0
+
+### Minor Changes
+
+- 819660d: Auto-release stale plan-subtask claims in `task_ready_for_agent`
+
+  A `claimed` subtask older than `STALE_PLAN_SUBTASK_CLAIM_MS` (default 1h)
+  is now released server-side at the top of `task_ready_for_agent` so the
+  ready-queue can route it to the next eligible worker on the same tick.
+  Replaces the prior `rescue_candidate` + `next_tool: rescue_stranded_scan`
+  suggestion path, which deadlocked policy-locked worker fleets (codex,
+  others) that refuse to rescue another agent's claim.
+
+  New behavior:
+
+  - The response carries `auto_released_stale_claims[]` listing the
+    releases performed by this call (omitted when nothing was stale).
+  - Pass `auto_release_stale_claims: false` to suppress the sweep and
+    observe stale state without mutating it (admin / telemetry callers).
+  - A new `autoReleaseStalePlanSubtaskClaims(store, plans, options)`
+    export from `@colony/core` exposes the same sweep to other consumers
+    (e.g. an autopilot tick).
+
+  Audit trail: each release writes one `plan-subtask-claim` observation
+  with `status: 'available'` and `rescue_reason: 'auto-released-stale-claim'`,
+  matching the shape `bulkRescueStrandedSessions` already uses.
+
+- 782ddb6: Add `cluster_observations` MCP tool for semantic dedupe.
+
+  Greedy single-linkage clustering by cosine threshold over a caller-
+  supplied set of observation IDs. The intended consumer is handoff /
+  attention_inbox dedupe: collect pending handoff IDs, pass them through
+  `cluster_observations(ids, threshold)`, and show the user one canonical
+  row per cluster instead of three different agents saying the same thing.
+
+  The MCP tool wraps a new `MemoryStore.clusterObservations` primitive,
+  so callers that already use the core package can dedupe without going
+  through MCP. Threshold defaults to `0.85`; observations missing an
+  embedding come back in a separate `unembedded` array so the caller
+  chooses whether to keep them as singletons. Capped at 500 input IDs to
+  bound the O(N²) cosine cost.
+
+- a83eeea: `colony gain drift` and a matching `savings_drift_report` MCP tool flag
+  tools whose median tokens-per-call has drifted up or down. Default windows
+  are non-overlapping: recent = last 3 days, baseline = 14 days ending 3 days
+  before recent. Default thresholds: `--threshold 1.25` (up), `--down-threshold
+0.75`, `--min-calls 20` per window. Classifications: `up_drift`,
+  `down_drift`, `new_tool` (no baseline), `gone` (no recent), `insufficient_data`,
+  `stable`.
+
+  Storage gains `Storage.mcpTokenDriftPerOperation()` which computes per-operation
+  medians with a `ROW_NUMBER() OVER (PARTITION BY operation ORDER BY tpc)`
+  window function — chosen over the correlated `LIMIT 1 OFFSET (COUNT-1)/2`
+  form because SQLite forbids outer aggregate references in scalar-subquery
+  `OFFSET`. A `mcpMetricsMinTs()` helper surfaces a one-line warning when the
+  baseline window starts before the first recorded metric.
+
+- 7dcece2: ICM slice 2 — feedback `record`, `search`, and `stats` MCP tools.
+
+  Adds a new `feedback` lane that records "AI predicted X, real answer
+  was Y" corrections so a future agent can search prior mistakes by
+  topic before repeating them. Migration 015 introduces the `feedback`
+  table plus a porter-unicode61 `feedback_fts` virtual table mirrored
+  by the standard `ai/ad/au` triggers; importance is a four-level enum
+  defaulting to `medium`. `prediction`, `correction`, and the optional
+  `context` flow through `MemoryStore.recordFeedback`, which routes each
+  body through `prepareMemoryText` — the same redact-then-compress path
+  observations use — so the compression invariant holds at the write
+  boundary.
+
+  MCP surface (progressive disclosure):
+
+  - `feedback_record({ topic, prediction, correction, context?, importance?, created_by? })` → `{ id }`
+  - `feedback_search({ query, topic?, limit? })` → compact hits (`id`, `topic`, `importance`, `score`, `snippet`, `created_at`)
+  - `feedback_stats({ topic? })` → per-topic counts and `last_created_at`
+
+  Follow-up (separate PR): a pre-tool-use hook that surfaces prior
+  corrections on inbound prompts. This PR keeps the slice scoped to the
+  storage + search surface so it can ship behind a manual query first.
+
+  Reference: `docs/icm-integration-plan.md` slice 2.
+
+- 0950b42: ICM slice 3 — observation importance + temporal decay.
+
+  Every observation now carries an `importance` tier
+  (`critical | high | medium | low`, default `medium`), a rolling
+  `access_count`, a `last_accessed_at` timestamp, and a `weight` value.
+  Critical/high pin their weight to the base value and never decay;
+  medium/low decay as `baseWeight / (1 + access_count * 0.1)` whenever
+  they are read. Read paths (`MemoryStore.search`, `getObservations`,
+  `semanticSearch`) coalesce ids into a debounced 50ms batch and flush
+  the access bookkeeping in one transactional UPDATE, so heavy read
+  loops trade at most one extra write per ~50ms window.
+
+  Search and `get_observations` MCP responses now include `importance`
+  and `weight` on each row (additive — older callers ignore them).
+  `task_post` accepts an optional `importance` parameter forwarded to
+  the underlying observation insert.
+
+  New CLI subcommand `colony memory prune` deletes near-zero-weight
+  medium/low rows; `--min-weight <n>` overrides the default 0.1
+  threshold and `--dry-run` reports the candidate count without
+  deleting. Critical/high are never affected.
+
+  Storage: schema bumped to version 17 with four additive columns on
+  `observations` and two new indexes. `Storage.recordAccess`,
+  `Storage.pruneLowDecay`, and `Storage.countLowDecayCandidates` are
+  the public primitives. (Originally targeted version 15 in isolation;
+  landed at 17 alongside slice 1 memoirs and slice 2 feedback.)
+
+- 0950b42: ICM slice 1 — memoirs (typed knowledge graphs).
+
+  A memoir is a named container of typed concepts (graph nodes) connected
+  by typed relations (graph edges). Concept content routes through the
+  same `prepareMemoryText` redact → compress pipeline used for
+  observations, so the compression invariant holds at the write boundary.
+  The nine relation types
+  (`part_of`, `depends_on`, `related_to`, `contradicts`, `refines`,
+  `alternative_to`, `caused_by`, `instance_of`, `superseded_by`) mirror
+  ICM's taxonomy and let agents express "what supersedes X", "what
+  contradicts decision Y", and similar structural reasoning without
+  abandoning the flat-observations primary store.
+
+  Schema bump 14 → 15 adds three tables (`memoirs`,
+  `memoir_concepts`, `memoir_relations`) and one virtual table
+  (`memoir_concepts_fts`) with `(ai, ad, au)` triggers mirroring
+  `observations_fts`. Migrations are forward-only.
+
+  `MemoryStore` exposes `createMemoir`, `listMemoirs`, `addConcept`,
+  `refineConcept`, `linkConcepts`, `searchConcepts`, and `inspectConcept`.
+  Seven MCP tools (`memoir_create`, `memoir_list`, `memoir_add_concept`,
+  `memoir_refine`, `memoir_link`, `memoir_search`, `memoir_inspect`) wrap
+  them with progressive disclosure — `memoir_search` returns compact hits
+  and `memoir_inspect` is the only path that returns full bodies plus a
+  BFS neighbourhood.
+
+- ccd51b6: Add `semantic_search` MCP tool for pure-vector recall.
+
+  The existing `search` tool starts with a BM25 candidate pool and then
+  vector-reranks it. Queries whose terms never appear in any stored
+  observation return zero candidates and miss the vector path entirely —
+  that hurts cross-language queries, concept-level queries, and any case
+  where the agent and the writer used different words for the same idea.
+
+  `semantic_search` is the escape hatch: skip FTS entirely, embed the
+  query, score every stored observation vector by cosine, return top-K.
+  Same compact return shape as `search` (id + session_id + kind + snippet
+
+  - score + ts + task_id) and the same progressive-disclosure rule
+    (callers fetch full bodies via `get_observations`). Requires an
+    embedding provider; returns a structured error otherwise.
+
+  The implementation is intentionally O(N) over stored vectors. At 50k
+  observations on the dev box it still fits inside the 50 ms p95 budget
+  for `search`; a future ANN index (sqlite-vss / HNSW) goes behind the
+  same method signature when scale demands it.
+
+- f7b490a: Cross-agent awareness: unified liveness + working-note "now lines". `readHivemind` accepts an optional `sqliteLiveness` source — sessions with stale heartbeat files but fresh SQLite observations are reclassified as working (`liveness_source: 'sqlite'`); every hivemind session now carries `liveness_source`. `attention_inbox` gains `active_working_notes` (latest task_note_working note per other live session, 30-min window) plus `summary.active_working_note_count`. The SessionStart task preface shows up to 3 co-participant "now:" lines so agents start each session knowing what everyone else is mid-flight on.
+
+### Patch Changes
+
+- cdf22de: Batch worker observation embedding calls and add batch-capable embedder providers.
+- 4a68470: Fix read-then-write race in claim cleanup paths
+
+  `releaseExpiredQuotaClaims` and `bulkRescueStrandedSessions` previously read
+  eligible claims outside their DEFERRED transaction, allowing two concurrent
+  callers to both snapshot the same rows and each emit a duplicate
+  `claim-weakened` or `rescue-stranded` audit observation.
+
+  The fix moves the claim read inside a `BEGIN IMMEDIATE` transaction on both
+  paths so the write lock is acquired before any row is inspected. The storage
+  `transaction()` helper gains an `{ immediate: true }` option that maps to
+  better-sqlite3's `.immediate()` mode. A new idempotency test confirms that
+  calling each cleanup path twice produces exactly one audit observation.
+
+- 9e1a791: Explain `task_claim_file` rejections instead of returning a generic "not claimable"
+
+  `task_claim_file` (and the `TaskThread.claimFile` /
+  `normalizeOptionalClaimPath` paths inside `@colony/core`) used to throw
+  `INVALID_CLAIM_PATH: claim path is not claimable` with no hint at the
+  reason. Telemetry showed agents bouncing off the same surface for the same
+  input — e.g. `colony/packages/core/test` (a directory) — because the
+  message gave them nothing to act on.
+
+  The rejection branch now classifies the failure and renders a specific
+  message per reason:
+
+  - `directory` — _"claim path "X" is a directory; claim individual files inside it instead."_
+  - `pseudo` — _"claim path "X" is a pseudo path (e.g. /dev/null) and cannot be claimed."_
+  - `outside_repo` — _"claim path "X" resolves outside this task's repo_root and cannot be claimed."_
+  - `empty` — _"claim path is empty."_
+  - fallback — the legacy generic message, still keyed on the input path.
+
+  New exports from `@colony/storage`:
+
+  - `classifyClaimPathRejection(context)` — pure classifier paralleling
+    `normalizeRepoFilePath`. Returns the reason or `null`.
+  - `claimPathRejectionMessage(reason, file_path)` — single source of
+    truth for the user-facing message so the MCP `task_claim_file`
+    handler and `TaskThread.claimFile` stay in sync.
+  - New storage method `classifyTaskFilePathRejection(task_id, file_path,
+cwd?)` plumbs the task → repo_root lookup that the existing
+    `normalizeTaskFilePath` already does, so callers only pay for the
+    classifier on the error branch.
+
+  No behavior change: the same inputs that used to be rejected are still
+  rejected; only the error message and code surface improve. Existing
+  INVALID_CLAIM_PATH error code is preserved.
+
+- dafe17b: Fix worktree-contention detection on macOS and Windows. `isGitWorktree` compared
+  `git rev-parse --show-toplevel` (a fully realpath'd path) against a merely
+  `resolve()`'d scan path. `resolve()` does not collapse symlinks (macOS
+  `/var` -> `/private/var`), 8.3 short names, or case (Windows), so every managed
+  worktree was dropped and `worktree_count` came back 0 — failing
+  `readWorktreeContentionReport` on the macOS/Windows CI matrix. Both sides are now
+  canonicalised with `realpathSync.native` (falling back to `resolve` when the path
+  can't be stat'd). Added a regression test that reaches the repo through an
+  absolute symlink, reproducing the condition on any platform.
+- 950a95d: Drop the default `listPlans` limit from 50 → 10.
+
+  Companion to the compact-default `task_plan_list` from #531. Even with compact responses, callers that don't pass `limit` were getting 50 plans by default. Lowering the implicit default trims the long tail for `task_plan_list` callers that omit `limit` — the explicit `.max(50)` ceiling on the MCP schema is preserved for callers that want more. Verified post-#531 that `colony gain` shows the predicted ~87% reduction on per-call token cost when the new binary is live; this change squeezes the remaining ~10-15% for non-compact-aware callers.
+
+- 7770b58: Session-start preface now enforces a global token budget (`sessionStart.prefaceTokenBudget`, default 800): low-priority sections (scope check, foraging, suggestions, prior sessions) drop first with a one-line trailer naming the trim. Prior-session summaries are capped at 300 chars each. MCP `get_observations` stops forcing expansion — it now honors `compression.expandForModel` (default false), so model-facing reads stay compressed unless `expand: true` is passed. `@colony/core` re-exports `countTokens`.
+- e6c5766: Reject `task_claim_file` at the MCP layer when the task's branch is a protected base branch.
+
+  `guardedClaimFile` already returned `protected_branch_rejected` (controlled by the `rejectProtectedBranchClaims` setting, default `true`) but the MCP handler silently fell through and recorded the claim anyway. The handler now checks for that status and returns a distinct `PROTECTED_BRANCH_CLAIM_REJECTED` error code with a message directing the agent to start a sandbox worktree first.
+
+  `PROTECTED_BRANCH_CLAIM_REJECTED` is added to `TASK_THREAD_ERROR_CODES` in `@colony/core`. Two new integration tests cover the reject and allow cases.
+
+  Note: the same `guardedClaimFile` call in `task_plan_claim_subtask` has the same gap; that is out of scope for this patch.
+
+- 60c3123: Changed the embedding backfill loop to send one batch of texts to embedders that support `embedBatch`, default worker batches to 32 observations, and persist each batch in a single SQLite transaction. The codex-gpu provider now calls `/embed/batch`, while storage copies returned embedding buffers so vector reads do not alias SQLite row memory.
+- 2e8fba1: Stop attributing the storage-at-rest compression claim to live `savings_report` calls
+
+  The `Storage at rest (per observation)` reference row used to map to `['savings_report']`. Live `savings_report` output is structured JSON (~3.5k tokens per call) where the caveman compressor preserves technical tokens byte-for-byte, so the live comparison projected the row's 1k-token baseline against ~3.5k actual tokens and reported negative savings (e.g. `-155%`).
+
+  The row stays in the static reference — caveman compression really does shrink prose observations on disk — but it is now a structural claim about the storage layer rather than a per-call cost, so `mcp_operations` is empty. `savings_report` calls now show up under `unmatched_operations` instead of inflating the row.
+
+- 66fa52c: Surface unpublished on-disk plan workspaces in `task_plan_list`, and chain `plan create` into `plan publish`
+
+  Two related improvements so orchestrators (and fleets of codex workers) don't waste cap on a plan they have a workspace for but never registered in Colony:
+
+  - `task_plan_list` now scans `openspec/plans/*` and merges any disk workspace whose slug is not already registered, marked `registry_status: 'unpublished'`. Workers cannot claim from these, but seeing them lets the orchestrator notice and run `colony plan publish <slug>`. Pass `include_unpublished: false` to mirror the legacy registered-only behavior.
+  - `colony plan create` now accepts `--publish` (plus optional `--publish-session`, `--publish-agent`, `--publish-auto-archive`) which chains into the same publish path immediately after the workspace is created, eliminating the "I created a plan but workers don't see it" failure mode.
+  - `PlanInfo.registry_status` gains an `'unpublished'` variant.
+
+- a87921e: `task_claim_file` now surfaces the task's `repo_root` in the
+  `INVALID_CLAIM_PATH` rejection message so agents see the exact anchor their
+  path failed to resolve against. The `outside_repo` and `unknown` branches of
+  `claimPathRejectionMessage(reason, file_path, { repo_root })` switch from a
+  terse "claim path is not claimable: …" to an actionable
+  "… resolves outside this task's repo_root \"<root>\" …" / "… could not be
+  resolved relative to this task's repo_root \"<root>\". Either retarget a task
+  whose repo_root matches the path being claimed, or pass a path that resolves
+  inside that anchor." So the agent can immediately tell whether to rewrite the
+  path or claim a different task.
+
+  The MCP handler in `apps/mcp-server/src/tools/task.ts` and both
+  `TaskThread.claimFile` / `TaskThread.normalizeOptionalClaimPath` paths in
+  `packages/core/src/task-thread.ts` thread the task's repo_root through.
+  Backward compatible — the `context` arg is optional and existing callers see
+  the original messages.
+
+- 9a36e5e: Fix the worktree-contention report silently dropping worktrees whose path
+  crosses a symlink (e.g. macOS's `/var` -> `/private/var` tmpdir). `git
+rev-parse --show-toplevel` returns a symlink-resolved path, but the detector
+  compared it with `resolve()`, which only normalizes — so the paths never
+  matched and the worktree was skipped. It now compares `realpathSync`
+  -canonicalized paths on both sides.
+- Updated dependencies [8f33724]
+- Updated dependencies [4a68470]
+- Updated dependencies [b6e2ad4]
+- Updated dependencies [86a3d1a]
+- Updated dependencies [edc318f]
+- Updated dependencies [9e1a791]
+- Updated dependencies [8917c73]
+- Updated dependencies [a83eeea]
+- Updated dependencies [e52cd83]
+- Updated dependencies [53836ff]
+- Updated dependencies [7dcece2]
+- Updated dependencies [0950b42]
+- Updated dependencies [0950b42]
+- Updated dependencies [7aba1eb]
+- Updated dependencies [3b86d74]
+- Updated dependencies [7770b58]
+- Updated dependencies [60c3123]
+- Updated dependencies [71ee50d]
+- Updated dependencies [3898ff3]
+- Updated dependencies [a87921e]
+- Updated dependencies [8a15958]
+  - @colony/storage@0.8.0
+  - @colony/config@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

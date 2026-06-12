@@ -1,5 +1,48 @@
 # @colony/config
 
+## 0.8.0
+
+### Minor Changes
+
+- b6e2ad4: Add `codex-gpu` embedding provider that targets the recodee
+  `codex-gpu-embedder` HTTP service (`POST /embed`).
+
+  When `settings.embedding.provider = 'codex-gpu'`, the worker hits the
+  local GPU embedder over HTTP instead of running Transformers.js in
+  process. Endpoint defaults to `http://127.0.0.1:8100`; override via
+  `settings.embedding.endpoint`. Captures `dim` from a one-shot warm-up
+  probe at init time, matching every other provider's contract.
+
+  The recodee dev box measures ~16 ms per single embed on the GPU vs ~200
+  ms on local CPU, so the worker's embedding-backfill loop completes
+  roughly 14× faster when configured this way. Behavior unchanged for any
+  deployment that does not opt in via the new provider value.
+
+- 86a3d1a: Colony is context-aware by default, never forcing. The PreToolUse hook no
+  longer hard-denies a tool call on a protected-branch claim conflict under the
+  default `warn` policy — it warns and records telemetry but lets the edit
+  proceed. Repos that want the old hard block opt in with
+  `bridge.policyMode = "block-on-conflict"`. The per-turn Claude Code
+  read-before-edit reminder is dropped (the harness already enforces it), and the
+  compact session-start contract is reframed from imperative "claim/hand off
+  before X" mandates to availability framing ("coordination is available, pull it
+  when it helps"). No write-path persistence changes.
+- 7aba1eb: MCP tool profiles: the stdio server now defaults to a lean ~20-tool surface (memory + coordination primitives), cutting per-session schema-injection context cost by more than half. Set `COLONY_TOOL_PROFILE=full` or `settings.mcp.toolProfile: 'full'` to restore the entire tool surface (plan, spec, foraging, memoir, proposal, savings, queen lanes). New `mcp.toolProfile` setting in `@colony/config`.
+- 3b86d74: Open coordination mode (new default): role gates become advisory. `settings.coordinationMode: 'open' | 'guarded'` — under open, scouts can claim, any agent can propose (no cap), everyone sees all proposals, and contended `task_claim_file` calls succeed with loud contention info (`contention`, `contention_detail`, `warning`) instead of erroring; table ownership stays with the live owner. Queen-only approval, subtask completion ownership, evidence requirements, and protected-branch rejection stay hard in both modes. `task_plan_claim_subtask` gains `force: boolean` to override unmet deps with an audit note. Set `coordinationMode: 'guarded'` to restore strict behavior.
+- 7770b58: Session-start preface now enforces a global token budget (`sessionStart.prefaceTokenBudget`, default 800): low-priority sections (scope check, foraging, suggestions, prior sessions) drop first with a one-line trailer naming the trim. Prior-session summaries are capped at 300 chars each. MCP `get_observations` stops forcing expansion — it now honors `compression.expandForModel` (default false), so model-facing reads stay compressed unless `expand: true` is passed. `@colony/core` re-exports `countTokens`.
+- 8a15958: SessionStart hook now emits a compact one-line pointer to the quota-safe
+  operating contract by default instead of the full ~14-line verbose block,
+  saving ~350 tokens per SessionStart fire in every repo. New
+  `sessionStart.contractMode` setting (`'compact' | 'full' | 'none'`,
+  default `'compact'`) restores the legacy verbose preface (`'full'`) or
+  suppresses the contract entirely (`'none'`). AGENTS.md / CLAUDE.md keep
+  carrying the full protocol, so the compact pointer is enough for active
+  agents; one-time onboarding flows can opt into `'full'`.
+
+### Patch Changes
+
+- 60c3123: Changed the embedding backfill loop to send one batch of texts to embedders that support `embedBatch`, default worker batches to 32 observations, and persist each batch in a single SQLite transaction. The codex-gpu provider now calls `/embed/batch`, while storage copies returned embedding buffers so vector reads do not alias SQLite row memory.
+
 ## 0.7.0
 
 ### Patch Changes

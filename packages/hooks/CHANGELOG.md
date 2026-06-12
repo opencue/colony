@@ -1,5 +1,70 @@
 # @colony/hooks
 
+## 0.8.0
+
+### Minor Changes
+
+- 86a3d1a: Colony is context-aware by default, never forcing. The PreToolUse hook no
+  longer hard-denies a tool call on a protected-branch claim conflict under the
+  default `warn` policy — it warns and records telemetry but lets the edit
+  proceed. Repos that want the old hard block opt in with
+  `bridge.policyMode = "block-on-conflict"`. The per-turn Claude Code
+  read-before-edit reminder is dropped (the harness already enforces it), and the
+  compact session-start contract is reframed from imperative "claim/hand off
+  before X" mandates to availability framing ("coordination is available, pull it
+  when it helps"). No write-path persistence changes.
+- 1d78c99: Push awareness: when an edit touches a file another live session holds, the PostToolUse hook now injects a one-line `[Colony] session X recently claimed <file> …` note into the agent's context immediately (Claude Code `additionalContext`), instead of waiting for the next turn's preface. Debounced to once per 2 minutes per session via an `awareness-push` observation marker (hook processes are one-shot, so the marker doubles as audit trail). `autoClaimFromToolUse` now reports live-owner blocked takeovers in its `conflicts` result.
+- 7770b58: Session-start preface now enforces a global token budget (`sessionStart.prefaceTokenBudget`, default 800): low-priority sections (scope check, foraging, suggestions, prior sessions) drop first with a one-line trailer naming the trim. Prior-session summaries are capped at 300 chars each. MCP `get_observations` stops forcing expansion — it now honors `compression.expandForModel` (default false), so model-facing reads stay compressed unless `expand: true` is passed. `@colony/core` re-exports `countTokens`.
+- 8a15958: SessionStart hook now emits a compact one-line pointer to the quota-safe
+  operating contract by default instead of the full ~14-line verbose block,
+  saving ~350 tokens per SessionStart fire in every repo. New
+  `sessionStart.contractMode` setting (`'compact' | 'full' | 'none'`,
+  default `'compact'`) restores the legacy verbose preface (`'full'`) or
+  suppresses the contract entirely (`'none'`). AGENTS.md / CLAUDE.md keep
+  carrying the full protocol, so the compact pointer is enough for active
+  agents; one-time onboarding flows can opt into `'full'`.
+- f7b490a: Cross-agent awareness: unified liveness + working-note "now lines". `readHivemind` accepts an optional `sqliteLiveness` source — sessions with stale heartbeat files but fresh SQLite observations are reclassified as working (`liveness_source: 'sqlite'`); every hivemind session now carries `liveness_source`. `attention_inbox` gains `active_working_notes` (latest task_note_working note per other live session, 30-min window) plus `summary.active_working_note_count`. The SessionStart task preface shows up to 3 co-participant "now:" lines so agents start each session knowing what everyone else is mid-flight on.
+
+### Patch Changes
+
+- 829556b: Surface silent `catch {}` failures to stderr (rule #9).
+
+  Every empty catch in `session-start`, `scanner`, and the foraging MCP tool now either logs a `[colony] <site>: <message>` line to stderr or carries a one-line comment explaining why silence is intentional (fs-stat races, missing-directory guards, best-effort cleanup). Previously a whole session's 43/43 MCP call failures could vanish with no trace.
+
+- 3898ff3: Stop scanning the full task table on every PreToolUse tool call
+
+  `protectedLiveClaimConflict` in the PreToolUse hook used `listTasks(1_000_000)` to find conflicting protected-branch claims and then linearly filtered the result by `repo_root` and `isProtectedBranch(branch)`. With the task table growing into the thousands across all agents, that scan dominated p95 latency on every editor tool call and violated the <150ms hook-handler budget.
+
+  `@colony/storage` now exposes `listProtectedBranchTasksByRepo(repoRoot)`, a single index-backed query against the existing `UNIQUE(repo_root, branch)` constraint. The PreToolUse hook calls this in place of the unbounded scan; defensive `resolve()` and `isProtectedBranch()` checks remain inside the loop so storage path inconsistencies still get filtered out. No new migration is needed — the unique index already covers the new query shape.
+
+- Updated dependencies [819660d]
+- Updated dependencies [cdf22de]
+- Updated dependencies [4a68470]
+- Updated dependencies [782ddb6]
+- Updated dependencies [b6e2ad4]
+- Updated dependencies [86a3d1a]
+- Updated dependencies [9e1a791]
+- Updated dependencies [dafe17b]
+- Updated dependencies [a83eeea]
+- Updated dependencies [7dcece2]
+- Updated dependencies [0950b42]
+- Updated dependencies [0950b42]
+- Updated dependencies [7aba1eb]
+- Updated dependencies [950a95d]
+- Updated dependencies [3b86d74]
+- Updated dependencies [7770b58]
+- Updated dependencies [e6c5766]
+- Updated dependencies [60c3123]
+- Updated dependencies [2e8fba1]
+- Updated dependencies [ccd51b6]
+- Updated dependencies [66fa52c]
+- Updated dependencies [a87921e]
+- Updated dependencies [8a15958]
+- Updated dependencies [f7b490a]
+- Updated dependencies [9a36e5e]
+  - @colony/core@0.8.0
+  - @colony/config@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

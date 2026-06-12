@@ -1,5 +1,40 @@
 # @colony/spec
 
+## 0.8.0
+
+### Patch Changes
+
+- 2cc5ff8: Windows CI green: `publishPlan` returns forward-slash `spec_change_path` / `plan_workspace_path` (separator-stable for MCP callers on every OS), and `archiveChange` fails deterministically when the archive target already exists (POSIX rename threw; Windows MoveFileEx silently clobbered).
+- Updated dependencies [8f33724]
+- Updated dependencies [819660d]
+- Updated dependencies [cdf22de]
+- Updated dependencies [4a68470]
+- Updated dependencies [782ddb6]
+- Updated dependencies [edc318f]
+- Updated dependencies [9e1a791]
+- Updated dependencies [8917c73]
+- Updated dependencies [dafe17b]
+- Updated dependencies [a83eeea]
+- Updated dependencies [e52cd83]
+- Updated dependencies [53836ff]
+- Updated dependencies [7dcece2]
+- Updated dependencies [0950b42]
+- Updated dependencies [0950b42]
+- Updated dependencies [950a95d]
+- Updated dependencies [7770b58]
+- Updated dependencies [e6c5766]
+- Updated dependencies [60c3123]
+- Updated dependencies [71ee50d]
+- Updated dependencies [2e8fba1]
+- Updated dependencies [3898ff3]
+- Updated dependencies [ccd51b6]
+- Updated dependencies [66fa52c]
+- Updated dependencies [a87921e]
+- Updated dependencies [f7b490a]
+- Updated dependencies [9a36e5e]
+  - @colony/storage@0.8.0
+  - @colony/core@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes

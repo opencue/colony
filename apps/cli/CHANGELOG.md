@@ -1,5 +1,199 @@
 # @imdeadpool/colony-cli
 
+## 0.8.0
+
+### Minor Changes
+
+- 86a62d9: `colony bridge lifecycle` gains `--replay <file>` and `--dry-run` so a saved `colony-omx-lifecycle-v1` envelope (e.g. captured `.pre.json`) can be routed offline through the real lifecycle logic without touching the live data dir. Combined with `--json`, this gives runtime integrators a CI-shaped harness for asserting on `route`, `event_type`, `extracted_paths`, and `ok`.
+- 99936fa: `colony bridge replay <file.pre.json>` is now a first-class subcommand for
+  offline debugging of captured pre-tool-use envelopes. Default is `--dry-run`
+  (ephemeral in-memory SQLite, no side effects); pass `--apply` to write to
+  the live store. A new `--rewrite-root <from>=<to>` flag rewrites absolute
+  paths in the envelope before dispatch so captures from another machine can
+  be replayed locally. Reuses the existing
+  `packages/contracts/fixtures/colony-omx-lifecycle-v1/` fixtures and does not
+  require the worker daemon. The shell shim at `apps/cli/bin/colony.sh`
+  short-circuits only `bridge lifecycle` to the daemon, so `bridge replay`
+  runs in-process automatically.
+- edc318f: `colony gain --summary` now renders an rtk-style compact view over the same
+  `mcp_metrics` receipts: headline KPI stack (total calls, input/output/total
+  tokens, tokens saved, total exec time), efficiency meter, top-N **By
+  Operation** table with proportional impact bars, a 30-day **Daily Activity**
+  bar graph, and a 12-day **Daily Breakdown** table. `--graph` and `--daily`
+  narrow the output to a single section; `--days <n>` and `--top-ops <n>` tune
+  the window and table size. Per-operation saved-token credit is distributed
+  across each comparison row's `matched_operations` proportionally to call share
+  so the `Saved` column lines up with the headline total.
+
+  Storage gains `Storage.aggregateMcpMetricsDaily({ since, until, operation })`
+  returning per-UTC-day rollups (`{ day, calls, input_tokens, output_tokens,
+total_tokens, total_duration_ms }`) ordered newest-first. Type exports
+  `AggregateMcpMetricsDailyOptions` and `McpMetricsDailyRow` come along.
+
+- 9f6b502: Add `colony grab` command group: a per-project localhost intake daemon that
+  turns a react-grab "Add context" submit into a colony task on a fresh
+  `agent/*` worktree and starts a detached `tmux` session running `codex`
+  inside it.
+
+  - `colony grab serve` — long-lived HTTP daemon on 127.0.0.1 with strict
+    request gating (bearer token, `Origin` allowlist, JSON content-type,
+    CORS preflight). On accepted `POST /grab`, creates a colony task,
+    posts the react-grab payload as a `kind: "note"` observation, writes
+    `.colony/INTAKE.md` into the worktree, and spawns `tmux new-session -d`
+    running `codex` in the worktree.
+  - `colony grab attach <task-id>` — convenience attach to the spawned
+    tmux session `rg-<task-id>`.
+  - `colony grab status` — list grab daemons known to `$COLONY_HOME`.
+
+  In-memory dedup (default 5 min window) keyed by
+  `sha256(repo_root|file_path|content|extra_prompt)` collapses repeat
+  submits into `task_post` notes on the existing task.
+
+  The daemon is off by default; it must be started explicitly.
+
+- 86a3d1a: `colony install` now auto-wires the Colony skill into the active cue profile so
+  the agent discovers Colony as a pullable capability (loads on a real trigger)
+  instead of relying on forced session prefaces. New `colony skills wire` /
+  `colony skills unwire` subcommands shell out to cue's own `cue skills
+add-to-profile` / `remove-from-profile`, targeting the cue-resident
+  `colony/colony` skill. Wiring is best-effort: a missing cue is a soft no-op that
+  prints the manual `npx skills add` fallback (now with the `recodee` typo fixed),
+  never a failed install. Opt out with `colony install --no-skills` or
+  `COLONY_SKILL_WIRE=0`; uninstall removes the skill symmetrically.
+- a83eeea: `colony gain drift` and a matching `savings_drift_report` MCP tool flag
+  tools whose median tokens-per-call has drifted up or down. Default windows
+  are non-overlapping: recent = last 3 days, baseline = 14 days ending 3 days
+  before recent. Default thresholds: `--threshold 1.25` (up), `--down-threshold
+0.75`, `--min-calls 20` per window. Classifications: `up_drift`,
+  `down_drift`, `new_tool` (no baseline), `gone` (no recent), `insufficient_data`,
+  `stable`.
+
+  Storage gains `Storage.mcpTokenDriftPerOperation()` which computes per-operation
+  medians with a `ROW_NUMBER() OVER (PARTITION BY operation ORDER BY tpc)`
+  window function — chosen over the correlated `LIMIT 1 OFFSET (COUNT-1)/2`
+  form because SQLite forbids outer aggregate references in scalar-subquery
+  `OFFSET`. A `mcpMetricsMinTs()` helper surfaces a one-line warning when the
+  baseline window starts before the first recorded metric.
+
+- 53836ff: `colony health --coach` walks a repo through first-week setup. It detects
+  adoption stage (`fresh` / `installed_no_signal` / `early` / `mid_adoption`)
+  from cheap signals (`countObservations`, installed-IDE flags,
+  `firstObservationTs`, `Math.max(toolCallsSince, countMcpMetricsSince)`),
+  then surfaces the NEXT incomplete step from a fixed 7-step ladder:
+  `install_runtime` → `first_task_post` → `first_task_claim_file` →
+  `first_task_hand_off` → `first_plan_claim` → `first_quota_release` →
+  `first_gain_review`. Each step carries an exact `cmd:` and `tool:` string.
+
+  Progress is persisted in a new `coach_progress` SQLite table (migration
+  `014-coach-progress.ts`, schema_version 13 → 14). Step completion is
+  event-observed via `mcp_metrics` / `observations`, never user-clicked.
+  `colony gain` records a `coach_gain_review` observation so step 7 can
+  self-detect. `--coach` is mutually exclusive with `--fix-plan` and respects
+  `--json`.
+
+- 0950b42: ICM slice 3 — observation importance + temporal decay.
+
+  Every observation now carries an `importance` tier
+  (`critical | high | medium | low`, default `medium`), a rolling
+  `access_count`, a `last_accessed_at` timestamp, and a `weight` value.
+  Critical/high pin their weight to the base value and never decay;
+  medium/low decay as `baseWeight / (1 + access_count * 0.1)` whenever
+  they are read. Read paths (`MemoryStore.search`, `getObservations`,
+  `semanticSearch`) coalesce ids into a debounced 50ms batch and flush
+  the access bookkeeping in one transactional UPDATE, so heavy read
+  loops trade at most one extra write per ~50ms window.
+
+  Search and `get_observations` MCP responses now include `importance`
+  and `weight` on each row (additive — older callers ignore them).
+  `task_post` accepts an optional `importance` parameter forwarded to
+  the underlying observation insert.
+
+  New CLI subcommand `colony memory prune` deletes near-zero-weight
+  medium/low rows; `--min-weight <n>` overrides the default 0.1
+  threshold and `--dry-run` reports the candidate count without
+  deleting. Critical/high are never affected.
+
+  Storage: schema bumped to version 17 with four additive columns on
+  `observations` and two new indexes. `Storage.recordAccess`,
+  `Storage.pruneLowDecay`, and `Storage.countLowDecayCandidates` are
+  the public primitives. (Originally targeted version 15 in isolation;
+  landed at 17 alongside slice 1 memoirs and slice 2 feedback.)
+
+- 66fa52c: Surface unpublished on-disk plan workspaces in `task_plan_list`, and chain `plan create` into `plan publish`
+
+  Two related improvements so orchestrators (and fleets of codex workers) don't waste cap on a plan they have a workspace for but never registered in Colony:
+
+  - `task_plan_list` now scans `openspec/plans/*` and merges any disk workspace whose slug is not already registered, marked `registry_status: 'unpublished'`. Workers cannot claim from these, but seeing them lets the orchestrator notice and run `colony plan publish <slug>`. Pass `include_unpublished: false` to mirror the legacy registered-only behavior.
+  - `colony plan create` now accepts `--publish` (plus optional `--publish-session`, `--publish-agent`, `--publish-auto-archive`) which chains into the same publish path immediately after the workspace is created, eliminating the "I created a plan but workers don't see it" failure mode.
+  - `PlanInfo.registry_status` gains an `'unpublished'` variant.
+
+- 61150c7: Add a `Movers` section to `colony gain` that splits the queried window into a
+  trailing "recent" segment and a "prior" segment, then surfaces operations whose
+  per-hour call rate, token rate, or error count has shifted materially between
+  the two. Top 3 risers (▲), top 3 fallers (▼), and top 3 error risers (!) are
+  listed inline above the existing Operations table. New ops (no prior activity)
+  are tagged `(new)` and disappeared ops `(gone)`. Two new flags: `--recent-hours
+<n>` to override the split (default: `window / 7`) and `--no-movers` to
+  suppress the section. JSON output gains a `live.movers` payload with the same
+  shape as the rendered rows.
+
+### Patch Changes
+
+- 55581ed: Add `colony demo`: a 60-second guided walkthrough of file-claim contention prevention. Two simulated agents (`claude-code` and `codex`) join the same task and try to claim `src/api.ts`; the second agent gets `blocked_active_owner`, then `claude-code` releases and `codex` retries successfully. The demo runs against an isolated temp data dir and cleans up on exit, with `--json` for a structured transcript and `--keep-data` for inspection. Also ship pre-baked `~/.colony/settings.json` fragments under `examples/policies/` for Next.js monorepos, Python packages, and Rust workspaces — each fragment lists stack-appropriate `privacy.excludePatterns` (build output, caches, `.env`) and `protected_files` (lockfiles, root config). README points to both surfaces from the install block.
+- 8917c73: Fix two `colony health` scoring bugs that surfaced as "bad" readiness areas with no real defect:
+
+  - **`colony_mcp_share.mcp_tool_calls = 0` despite live MCP traffic.** The counter only read `tool_calls` rows, missing MCP traffic when the calling agent's PostToolUse hook didn't fire for `mcp__*` tools. The counter now takes the max of that observed count and `mcp_metrics` row count (colony MCP server's own per-call receipt), with the source surfaced in `source_breakdown.colony_mcp_metrics`. New storage helper `countMcpMetricsSince(since, until?)`.
+  - **`claim_before_edit_ratio = null` when any edits lacked file_path metadata.** Forcing the ratio to null whenever `edit_tool_calls !== edits_with_file_path` turned a real 200/363 = 55% signal into a bare `n/a` headline. The ratio is now computed over measurable edits whenever `edits_with_file_path > 0`; the `status` field still communicates partial measurability for downstream consumers.
+
+- e52cd83: Fix `aggregateMcpMetrics` error_reasons grouping so per-row counts sum to
+  `error_count`. The grouping previously partitioned by `(operation, error_code,
+error_message)`, but several handlers embed unique session IDs in their error
+  messages (e.g. `sub-task is claimed by codex-session-XYZ`), so each race loss
+  produced a distinct group. Combined with a 3-row truncation per operation, the
+  result was that nearly all errors were hidden — `task_plan_claim_subtask` would
+  report 7 errors in the Top error reasons table while the Operations table showed
+  93 for the same row. Grouping now drops `error_message` from the key (SQLite
+  picks the row with the latest `ts` for the sample message via its bare-column-
+  with-MAX optimization) and the per-operation cap is bumped from 3 to 8 since
+  codes are low-cardinality. Sum-of-reasons now matches error_count exactly.
+- 9376314: Stop mislabelling generic MCP errors and reduce SQLite contention failures.
+
+  - `mcpError` now codes non-`TaskThreadError` throws as `INTERNAL_ERROR` instead of `OBSERVATION_NOT_ON_TASK`, so validation failures and SQLite "database is locked" errors surface honestly in `mcp_metrics` and `colony gain`.
+  - Storage now sets `PRAGMA busy_timeout = 5000` on every connection (worker daemon, MCP server, CLI hooks all open separate handles to the same WAL DB), so concurrent writers wait the kernel out instead of throwing `SQLITE_BUSY` immediately.
+
+- 5efdb52: Native Windows support for the `colony` CLI. The bin entry was a POSIX shell
+  script (`bin/colony.sh`) that npm could not execute on Windows without WSL,
+  breaking every Windows install of the package. The shim is now a Node ES
+  module (`bin/colony.mjs`) using only `node:*` builtins, so npm's generated
+  `.cmd` / `.ps1` wrappers run it natively under cmd, PowerShell, and Git Bash.
+
+  The daemon fast-path for `colony bridge lifecycle --json` is preserved — the
+  HTTP POST to `127.0.0.1:$COLONY_WORKER_PORT/api/bridge/lifecycle` now goes
+  through `node:http`, with a `node:net` connect probe (1s) before the request
+  (2s) so the fallback latency stays close to the curl-based version when the
+  daemon isn't running. Stdin is buffered and replayed on fallback, preserving
+  rule #10 (a dead daemon must never lose or block a write).
+
+  CI now runs the build matrix on `ubuntu-latest`, `macos-latest`, and
+  `windows-latest` across Node 20 and 22 so this regression cannot recur.
+
+- 1d78c99: Push awareness: when an edit touches a file another live session holds, the PostToolUse hook now injects a one-line `[Colony] session X recently claimed <file> …` note into the agent's context immediately (Claude Code `additionalContext`), instead of waiting for the next turn's preface. Debounced to once per 2 minutes per session via an `awareness-push` observation marker (hook processes are one-shot, so the marker doubles as audit trail). `autoClaimFromToolUse` now reports live-owner blocked takeovers in its `conflicts` result.
+- 08482b1: Surface hot-loop dominance and drop double-"saved" labels in `colony gain`.
+  Top spend now reports the operation's share of total tokens, and a `Hot loop:`
+  callout fires when one operation owns ≥70% of token spend across ≥100 calls.
+  The "Saved:" / "USD saved:" labels are renamed to "Net:" / "Net USD:" so the
+  phrase no longer reads "Saved: X saved", and the live sessions header drops the
+  trailing `, -` when cost isn't configured.
+- 658b722: Raise SQLite contention headroom in `@colony/storage` so the worker daemon,
+  MCP server, CLI hooks, and codex-fleet panes can share `~/.colony/data.db`
+  without surfacing `SQLITE_BUSY: database is locked` to callers. The
+  `Storage` constructor now sets `busy_timeout=15000` (was 5000), and
+  `withBusyRetry` defaults bump to 8 attempts with up-to-1s backoff (was 5
+  attempts / 250ms cap). Happy-path callers are unaffected because no busy
+  error still means no retry sleep; sustained contention from ~30+ concurrent
+  writers — the codex-fleet shape that triggered this — now has ~3.85s of
+  combined SQLite + Node retry headroom before raising.
+
 ## 0.7.0
 
 ### Minor Changes
