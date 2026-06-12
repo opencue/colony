@@ -1104,7 +1104,7 @@ resolution never writes the fallback pointer; choose a task by `repo_root` and
 - Current working state starts with `task_note_working`; use `task_post kind:'note'` when the task id is already known and the note is not the current working-state handoff.
 - Routing note: use task_message for directed agent-to-agent coordination; keep task_post for shared kind:'note'|'blocker'|'question'|'answer'|'decision' thread state.
 - Use specific tools for claim / hand_off / accept.
-- Fallback when task_relay is unavailable in your client tool surface: post a note or blocker containing reason, one_line, base_branch, fetch_files_at if known, touched files, and whether the named source branch/worktree is missing.
+- Fallback when task_relay is unavailable in your client tool surface: post a note or blocker containing the reason, a one-line summary, base_branch, fetch_files_at if known, touched files, and whether the named source branch/worktree is missing.
 - After that, use task_hand_off when another agent must resume the work.
 
 ## `task_claim_file`

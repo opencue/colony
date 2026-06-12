@@ -39,6 +39,7 @@ async function listTools(profile: 'lean' | 'full'): Promise<ListedTool[]> {
     return tools as ListedTool[];
   } finally {
     await client.close();
+    await server.close();
     store.close();
     rmSync(dir, { recursive: true, force: true });
   }
@@ -57,7 +58,6 @@ describe('tool registration token budget', () => {
   it(`lean profile registration surface stays under ${LEAN_BUDGET_TOKENS} tokens`, async () => {
     const tools = await listTools('lean');
     const total = registrationTokens(tools);
-    // eslint-disable-next-line no-console
     console.info(`[tool-budget] lean: ${tools.length} tools, ~${total} tokens`);
     expect(total).toBeLessThanOrEqual(LEAN_BUDGET_TOKENS);
   });
@@ -65,7 +65,6 @@ describe('tool registration token budget', () => {
   it(`full profile registration surface stays under ${FULL_BUDGET_TOKENS} tokens`, async () => {
     const tools = await listTools('full');
     const total = registrationTokens(tools);
-    // eslint-disable-next-line no-console
     console.info(`[tool-budget] full: ${tools.length} tools, ~${total} tokens`);
     expect(total).toBeLessThanOrEqual(FULL_BUDGET_TOKENS);
   });
